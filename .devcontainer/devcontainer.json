@@ -1,0 +1,38 @@
+{
+  "name": "Flutter Dev",
+
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Dart-Code.dart-code",
+        "Dart-Code.flutter",
+        "eamodio.gitlens",
+        "GitHub.vscode-pull-request-github",
+        "vivaxy.vscode-conventional-commits"
+      ],
+      "settings": {
+        "dart.flutterSdkPath": "/opt/flutter"
+      }
+    }
+  },
+
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "latest",
+      "ppa": true
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "mounts": [
+    "source=${localWorkspaceFolderBasename}-pub-cache,target=/root/.pub-cache,type=volume"
+  ],
+
+  "postCreateCommand": "flutter doctor && flutter pub get && git config --global --add safe.directory ${containerWorkspaceFolder}",
+
+  "remoteUser": "root"
+}
