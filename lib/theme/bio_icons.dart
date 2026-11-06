@@ -1,0 +1,50 @@
+import 'package:flutter/widgets.dart';
+
+abstract final class BioIcons {
+  static const _family = 'MaterialDesignIcons';
+
+  static const accountCogOutline = IconData(0xf1371, fontFamily: _family);
+  static const accountOutline = IconData(0xf0013, fontFamily: _family);
+  static const alertCircleOutline = IconData(0xf05d6, fontFamily: _family);
+  static const arrowLeft = IconData(0xf004d, fontFamily: _family);
+  static const arrowRight = IconData(0xf0054, fontFamily: _family);
+  static const arrowTopRight = IconData(0xf005c, fontFamily: _family);
+  static const at = IconData(0xf0065, fontFamily: _family);
+  static const bellOutline = IconData(0xf009c, fontFamily: _family);
+  static const bird = IconData(0xf15c6, fontFamily: _family);
+  static const bookmarkOutline = IconData(0xf00c3, fontFamily: _family);
+  static const camera = IconData(0xf0100, fontFamily: _family);
+  static const cameraOutline = IconData(0xf0d5d, fontFamily: _family);
+  static const check = IconData(0xf012c, fontFamily: _family);
+  static const checkCircleOutline = IconData(0xf05e1, fontFamily: _family);
+  static const chevronRight = IconData(0xf0142, fontFamily: _family);
+  static const closeCircleOutline = IconData(0xf015a, fontFamily: _family);
+  static const compassOutline = IconData(0xf018c, fontFamily: _family);
+  static const crosshairsGps = IconData(0xf01a4, fontFamily: _family);
+  static const emailOutline = IconData(0xf01f0, fontFamily: _family);
+  static const eyeOffOutline = IconData(0xf06d1, fontFamily: _family);
+  static const eyeOutline = IconData(0xf06d0, fontFamily: _family);
+  static const flashOutline = IconData(0xf06d5, fontFamily: _family);
+  static const flowerOutline = IconData(0xf09f0, fontFamily: _family);
+  static const genderMaleFemale = IconData(0xf029e, fontFamily: _family);
+  static const gestureTap = IconData(0xf0741, fontFamily: _family);
+  static const homeOutline = IconData(0xf06a1, fontFamily: _family);
+  static const imageMultipleOutline = IconData(0xf02ef, fontFamily: _family);
+  static const imageOutline = IconData(0xf0976, fontFamily: _family);
+  static const informationOutline = IconData(0xf02fd, fontFamily: _family);
+  static const leaf = IconData(0xf032a, fontFamily: _family);
+  static const leafOff = IconData(0xf12d9, fontFamily: _family);
+  static const lightbulbOutline = IconData(0xf0336, fontFamily: _family);
+  static const lockOutline = IconData(0xf0341, fontFamily: _family);
+  static const logout = IconData(0xf0343, fontFamily: _family);
+  static const magnify = IconData(0xf0349, fontFamily: _family);
+  static const mapMarkerOutline = IconData(0xf07d9, fontFamily: _family);
+  static const mapMarkerRadiusOutline = IconData(0xf12fc, fontFamily: _family);
+  static const mapOutline = IconData(0xf0982, fontFamily: _family);
+  static const navigationVariant = IconData(0xf18f0, fontFamily: _family);
+  static const paw = IconData(0xf03e9, fontFamily: _family);
+  static const pencilOutline = IconData(0xf0cb6, fontFamily: _family);
+  static const shieldKeyOutline = IconData(0xf0bc5, fontFamily: _family);
+  static const shieldLockOutline = IconData(0xf0ccc, fontFamily: _family);
+  static const treeOutline = IconData(0xf0e69, fontFamily: _family);
+}
