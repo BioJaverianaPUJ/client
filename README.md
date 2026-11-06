@@ -1,156 +1,48 @@
-# BioJaveriana - Backend (API)
+# BioJaveriana — aplicación móvil
 
-## Información
+Aplicación Flutter/Dart para explorar la biodiversidad del campus, consultar especies y especímenes, registrar observaciones y gestionar el perfil.
 
-Este repositorio contiene el código del backend de **BioJaveriana**, desarrollado en **Java utilizando Spring Boot** y desplegado en un VPS en la nube.
+## Requisitos
 
-Para obtener información sobre el desarrollo y las contribuciones al proyecto, consulte las secciones correspondientes a continuación.
+Flutter con Dart 3.12.2 o compatible con `pubspec.yaml`, Android SDK y un dispositivo o emulador. Para iOS se requiere macOS y Xcode.
 
-## Desarrollo
+## Ejecutar
 
-Para el desarrollo local se requieren los siguientes componentes:
+Desde la raíz del repositorio:
 
-- Tener instalada una versión compatible de **Docker (>= 29)**.
-- Tener instalada la extensión **Docker Dev Containers** en el entorno de desarrollo.
-
-**Dev Containers** es una herramienta que permite desarrollar dentro de un entorno de Docker preconfigurado. Esto garantiza que todos los desarrolladores utilicen versiones y dependencias consistentes, evitando problemas relacionados con diferencias entre entornos locales.
-
-### Configuración
-
-Clone el repositorio y ábralo utilizando su editor de código compatible con Dev Containers.
-
-Una vez abierto el proyecto, utilice la opción:
-
-> **Dev Containers: Reopen in Container**
-
-El entorno de desarrollo se encargará de crear el contenedor necesario para el backend y de iniciar los servicios requeridos, incluyendo una instancia local de **PostgreSQL**.
-
-La estructura general del entorno es:
-
-```text
-┌───────────────────────────────┐
-│        Dev Container          │
-│                               │
-│        Spring Boot API        │
-└───────────────┬───────────────┘
-                │
-                │ PostgreSQL
-                ▼
-┌───────────────────────────────┐
-│       PostgreSQL Container    │
-│                               │
-│       Base de datos local     │
-└───────────────────────────────┘
-```
-
-Una vez iniciado el contenedor, el proyecto puede ejecutarse normalmente utilizando las herramientas de desarrollo disponibles dentro del entorno.
-
-### Dependencias
-Las dependencias del proyecto se administran mediante pub y se encuentran definidas en el archivo `pubspec.yaml`.
-
-Para instalar las dependencias:
-```
+```sh
 flutter pub get
-```
-
-Para actualizar las dependencias dentro de las restricciones especificadas en `pubspec.yaml`:
-```
-flutter pub upgrade
-```
-
-Las dependencias no deben modificarse manualmente dentro del directorio `.pub-cache`.
-
-### Ejecución
-Para verificar que Flutter esté correctamente configurado:
-```
-flutter doctor
-```
-
-Para comprobar los dispositivos disponibles:
-```
 flutter devices
+flutter run --dart-define-from-file=config.local.json
 ```
 
-La aplicación puede ejecutarse utilizando:
-```
-flutter run
-```
+Copia `config.example.json` como `config.local.json` y configura tu clave pública de CARTO Basemaps para el mapa Positron. El archivo local está excluido de Git. `API_BASE_URL` permite cambiar el backend. Sin clave de CARTO se utiliza el proveedor alternativo configurado; consulta sus condiciones antes de publicar.
 
-También puede utilizarse la opción Run and Debug del editor.
+## Validar y compilar
 
-Para ejecutar la aplicación en un dispositivo Android conectado, asegúrese de que la depuración USB esté habilitada y que el dispositivo sea reconocido por:
-
-```
-adb devices
+```sh
+flutter analyze
+flutter test
+flutter build apk --release --dart-define-from-file=config.local.json
 ```
 
-> [!NOTE]
-> El desarrollo dentro de un Dev Container requiere que el dispositivo Android o emulador sea accesible desde el entorno de Docker. Dependiendo del sistema operativo y la configuración utilizada, puede ser necesario configurar el acceso al dispositivo.
+El APK se genera en `build/app/outputs/flutter-apk/app-release.apk`. La firma de distribución debe configurarse antes de publicar en una tienda; no se incluyen certificados ni claves privadas.
 
+## Estructura
 
-###
+- `lib/config`: API, mapas y perímetro de referencia.
+- `lib/models`, `lib/services`, `lib/state`: datos, conexión y sesión.
+- `lib/screens`, `lib/widgets`, `lib/theme`: pantallas y diseño compartido.
+- `assets`: marca, ilustraciones y geometría del campus.
+- `test`: pruebas de integración de contratos y reglas de presentación.
+- `docs`: requisitos y estado de integración.
+
+## Estado de integración
+
+Autenticación, perfil, catálogo y observaciones utilizan los servicios implementados del backend. La experiencia, la gamificación y otras funciones pendientes se presentan sin inventar resultados. El perímetro del campus es una referencia de OpenStreetMap, no un límite institucional aprobado ni una validación del servidor.
+
+Consulta [la revisión del SRS v0.3](docs/INTEGRACION_SRS_V03.md) para conocer contratos y pendientes. Las atribuciones de OpenStreetMap y CARTO deben mantenerse visibles.
+
 ## Contribuciones
 
-Para contribuir al repositorio se deben realizar Pull Requests (PR).
-
-Los cambios pequeños y de bajo riesgo pueden realizarse directamente sobre `main`, siempre que esto sea apropiado para el cambio.
-
-Para cambios más grandes, nuevas funcionalidades o modificaciones que puedan afectar otras partes del sistema, se debe crear una rama independiente a partir de `main`.
-
-Las ramas de desarrollo deben mantenerse actualizadas con `main` durante el desarrollo para reducir conflictos al momento de realizar el merge.
-
-Una vez finalizado el desarrollo:
-
-1. Verifique que el proyecto compile correctamente.
-2. Ejecute las pruebas disponibles.
-3. Actualice la rama con los cambios más recientes de `main`.
-4. Cree un Pull Request hacia `main`.
-5. Espere la revisión y aprobación correspondiente antes de realizar el merge.
-
-Solamente la rama `main` estará desplegada en el ambiente de producción.
-
-### Convenciones de ramas
-
-Se recomienda utilizar nombres descriptivos para las ramas. Por ejemplo:
-
-```
-feature/nombre-de-la-funcionalidad
-fix/descripcion-del-error
-refactor/descripcion-del-cambio
-```
-
-Las ramas deben tener un único propósito y evitar mezclar funcionalidades o correcciones no relacionadas.
-
-> [!WARNING]
-> Si encuentras un error en tu rama, corrígelo en una rama de corrección (hotfix/bugfix), haz un Pull Request hacia `main` y luego actualiza tu rama. Ramas marcadas como hotfix/bugfix cuentan con prioridad.
-
-### Convenciones de commits
-
-Los mensajes de commit deben escribirse en **tiempo presente** (modo imperativo) y, cuando sea posible, seguir el formato de **Conventional Commits**:
-
-Los tipos más comunes son:
-
-| Tipo | Uso |
-|------|-----|
-| `feat` | Nueva funcionalidad |
-| `fix` | Corrección de un error |
-| `refactor` | Cambios en el código que no corrigen errores ni agregan funcionalidades (reestructuración interna) |
-| `chore` | Tareas de mantenimiento (dependencias, configuración, scripts, etc.) que no afectan la lógica de la aplicación |
-| `docs` | Cambios en la documentación |
-| `test` | Agregar o corregir pruebas |
-| `style` | Cambios de formato (espacios, indentación, etc.) que no afectan la lógica |
-| `perf` | Cambios que mejoran el rendimiento |
-
-Ejemplos:
-```
-feat: agrega endpoint para consultar muestras por usuario
-fix: corrige validación de fecha en formulario de registro
-refactor: simplifica lógica de autenticación
-chore: actualiza dependencias de Spring Boot
-docs: actualiza instrucciones de configuración del Dev Container
-```
-
-Los commits pueden estar tanto en español como en ingles, pero se recomienda utilizar ingles.
-
-> [!TIP]
-> Usar tiempo presente ayuda a mantener consistencia en el historial: el mensaje debe completar la frase "Este commit **hace** ...", no "Este commit **hizo** ...".
+Los cambios de funcionalidades se proponen mediante una rama y un pull request. No subir configuraciones locales, claves, dependencias descargadas ni compilaciones.
