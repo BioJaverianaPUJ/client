@@ -193,6 +193,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  Future<void> _react(PostComment c, String? emoji) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await AppScope.read(context).community.react(c.id, emoji);
+      await _load();
+    } catch (e) {
+      if (mounted) showMessage(context, messageFor(e));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Widget _comment(PostComment c, {bool reply = false}) {
     final mine = AppScope.read(context).user?.id == c.authorId;
     return Padding(
@@ -213,6 +226,28 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 child: Text(c.authorName),
               ),
               Text(c.text),
+              PopupMenuButton<String>(
+                tooltip: 'Reaccionar al comentario',
+                enabled: !_saving,
+                onSelected: (value) =>
+                    _react(c, value == 'REMOVE' ? null : value),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'LOVE', child: Text('❤️ Me encanta')),
+                  PopupMenuItem(value: 'HAHA', child: Text('😂 Me divierte')),
+                  PopupMenuItem(value: 'WOW', child: Text('😮 Me sorprende')),
+                  PopupMenuItem(value: 'SAD', child: Text('😢 Me entristece')),
+                  PopupMenuItem(value: 'ANGRY', child: Text('😠 Me enoja')),
+                  PopupMenuItem(value: 'LIKE', child: Text('👍 Me gusta')),
+                  PopupMenuItem(
+                    value: 'REMOVE',
+                    child: Text('Retirar mi reacción'),
+                  ),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text('${c.reactions} reacciones · Reaccionar'),
+                ),
+              ),
               Text(
                 dateLabel(c.date.toLocal()),
                 style: Theme.of(context).textTheme.labelSmall,
@@ -317,6 +352,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         TextField(
           controller: _text,
           enabled: !_saving,
+          maxLength: 5000,
           minLines: 1,
           maxLines: 5,
           decoration: const InputDecoration(labelText: 'Escribe un comentario'),

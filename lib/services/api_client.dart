@@ -112,6 +112,9 @@ class ApiClient {
     bool authenticated = true,
   }) => _send('POST', path, body: body, authenticated: authenticated);
 
+  Future<Map<String, dynamic>> put(String path, {Map<String, dynamic>? body}) =>
+      _send('PUT', path, body: body, authenticated: true);
+
   Future<Map<String, dynamic>> patch(
     String path, {
     required Map<String, dynamic> body,
@@ -170,6 +173,8 @@ class ApiClient {
 
     try {
       final decoded = jsonDecode(text);
+      if (decoded is List) return {'content': decoded};
+      if (decoded is num) return {'value': decoded};
       if (decoded is Map<String, dynamic>) {
         return decoded;
       }

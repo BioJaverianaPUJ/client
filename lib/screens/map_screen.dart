@@ -27,6 +27,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   List<LatLng> _boundary = [];
   List<CampusZone> _zones = [];
   List<Sighting> _animals = [];
+  Set<String> _verifiedSpecimens = {};
   LatLng? _position;
   bool _plants = true, _showAnimals = true, _green = true, _interest = true;
   bool _loading = true, _locating = false, _more = false, _onlineLayers = false;
@@ -92,16 +93,23 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       try {
         final animals = await session.community.sightings();
         if (mounted) {
-          setState(
-            () => _animals = animals
+          setState(() {
+            _verifiedSpecimens = animals
+                .where(
+                  (s) =>
+                      s.status == Verification.verified && s.specimen != null,
+                )
+                .map((s) => s.specimen!['id'] as String)
+                .toSet();
+            _animals = animals
                 .where(
                   (s) =>
                       s.animal &&
                       s.status != Verification.failed &&
                       s.status != Verification.processing,
                 )
-                .toList(),
-          );
+                .toList();
+          });
         }
       } catch (e) {
         if (mounted) setState(() => _error = e);
@@ -111,14 +119,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       try {
         final boundary = await session.community.campusBoundary();
         final zones = await session.community.zones();
-        final animals = await session.community.sightings();
         if (mounted) {
           setState(() {
             _boundary = boundary;
             _zones = zones;
-            _animals = animals
-                .where((s) => s.animal && s.status != Verification.failed)
-                .toList();
             _onlineLayers = true;
           });
         }
@@ -162,7 +166,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       final species = await AppScope.read(
         context,
       ).catalog.species(specimen['speciesId'] as String);
-      if (mounted) showSpecies(context, species, specimen: specimen);
+      if (mounted) {
+        showSpecies(
+          context,
+          species,
+          specimen: _verifiedSpecimens.contains(specimen['id'])
+              ? specimen
+              : null,
+        );
+      }
     } catch (e) {
       if (mounted) showMessage(context, messageFor(e));
     }
@@ -189,10 +201,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               ListTile(
                 leading: const Icon(Icons.park_outlined),
                 title: Text('Espécimen ${i + 1}'),
-                subtitle: Text(
-                  cluster.items[i]['notes'] as String? ??
-                      'Consultar especie y detalles',
-                ),
+                subtitle: Text('Consultar especie y detalles'),
                 onTap: () => Navigator.pop(context, cluster.items[i]),
               ),
           ],

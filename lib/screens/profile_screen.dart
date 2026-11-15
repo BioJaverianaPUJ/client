@@ -1,3 +1,4 @@
+import 'reports_screen.dart';
 import 'account_screen.dart';
 import '../widgets/profile_experience.dart';
 import 'package:flutter/material.dart';
@@ -168,7 +169,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     const SizedBox(height: 12),
                     Text(
-                      user.fullName,
+                      _own ? user.fullName : user.username,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
@@ -259,6 +260,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _ProfileActivity(userId: user.id),
               if (_own) ...[
                 const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.flag_outlined),
+                  title: const Text('Mis denuncias'),
+                  subtitle: const Text('Consulta el estado de tus reportes'),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ReportsScreen()),
+                  ),
+                ),
                 ListTile(
                   leading: const Icon(Icons.lock_outline),
                   title: const Text('Cambiar contraseña'),

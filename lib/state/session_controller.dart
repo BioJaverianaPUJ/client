@@ -1,5 +1,5 @@
 import '../services/account_repository.dart';
-import '../services/observation_repository.dart';
+import '../services/social_repository.dart';
 import '../services/community_repository.dart';
 import '../services/catalog_service.dart';
 import 'dart:async';
@@ -25,7 +25,7 @@ class SessionController extends ChangeNotifier {
     CommunityRepository? community,
     AccountRepository? account,
   }) : account = account ?? AccountRepository(),
-       community = community ?? ObservationRepository(api),
+       community = community ?? SocialRepository(api),
        _api = api,
        _auth = AuthService(api),
        _users = UserService(api) {
@@ -84,6 +84,7 @@ class SessionController extends ChangeNotifier {
     _activate(stored);
     notifyListeners();
     unawaited(_loadProfileQuietly());
+    if (autoRefresh) unawaited(_refresh());
   }
 
   Future<void> login({required String email, required String password}) async {
@@ -184,7 +185,7 @@ class SessionController extends ChangeNotifier {
     }
     if (session.isExpired()) {
       unawaited(_expire());
-    } else if (session.isExpired(margin: _refreshBefore)) {
+    } else {
       unawaited(_refresh());
     }
   }

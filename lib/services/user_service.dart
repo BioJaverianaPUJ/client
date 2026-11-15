@@ -11,7 +11,10 @@ class UserService {
       UserProfile.fromJson(await _api.get('/users/me'));
 
   Future<UserProfile> byId(String id) async =>
-      UserProfile.fromJson(await _api.get('/users/${Uri.encodeComponent(id)}'));
+      _publicProfile(await _api.get('/users/${Uri.encodeComponent(id)}'));
+  UserProfile _publicProfile(Map<String, dynamic> json) => UserProfile.fromJson(
+    {...json, 'firstName': '', 'lastName': '', 'email': '', 'gender': null},
+  );
   Future<UserProfile> update(Map<String, dynamic> data) async =>
       UserProfile.fromJson(await _api.patch('/users/me', body: data));
   Future<UserProfile> upload(LocalPhoto photo, String type) async =>

@@ -19,7 +19,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
   final List<LocalPhoto> _photos = [];
   late Sighting? _sighting = widget.sighting ?? widget.post?.sighting;
   String? _error;
-  bool _busy = false, _saved = false;
+  bool _busy = false, _saved = false, _unlinked = false;
   bool get _dirty =>
       _title.text != (widget.post?.title ?? '') ||
       _text.text != (widget.post?.text ?? '') ||
@@ -100,6 +100,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
       photos: _photos,
       retainedImages: _retained,
       sighting: _sighting,
+      observationId: _unlinked ? null : widget.post?.observationId,
     );
     final error = draft.validate();
     if (error != null) {
@@ -161,6 +162,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
             controller: _title,
             onChanged: (_) => setState(() {}),
             enabled: !_busy,
+            maxLength: 200,
             decoration: const InputDecoration(labelText: 'Título *'),
           ),
           const SizedBox(height: 16),
@@ -168,6 +170,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
             controller: _text,
             onChanged: (_) => setState(() {}),
             enabled: !_busy,
+            maxLength: 200,
             minLines: 3,
             maxLines: 8,
             decoration: const InputDecoration(
@@ -175,17 +178,25 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          if (widget.post != null)
+            const Text(
+              'Por ahora puedes editar el texto y la observación; las imágenes se conservan.',
+            ),
           Text('Imágenes: ${_photos.length + _retained.length}/10'),
           Wrap(
             spacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed: _busy ? null : () => _pick(true),
+                onPressed: _busy || widget.post != null
+                    ? null
+                    : () => _pick(true),
                 icon: const Icon(Icons.camera_alt_outlined),
                 label: const Text('Cámara'),
               ),
               OutlinedButton.icon(
-                onPressed: _busy ? null : () => _pick(false),
+                onPressed: _busy || widget.post != null
+                    ? null
+                    : () => _pick(false),
                 icon: const Icon(Icons.photo_library_outlined),
                 label: const Text('Galería'),
               ),
@@ -196,7 +207,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
               children: [
                 RemotePhoto(image, height: 160),
                 TextButton.icon(
-                  onPressed: _busy
+                  onPressed: _busy || widget.post != null
                       ? null
                       : () => setState(() => _retained.remove(image)),
                   icon: const Icon(Icons.close),
@@ -209,7 +220,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
               children: [
                 Image.memory(photo.bytes, height: 160, fit: BoxFit.cover),
                 TextButton.icon(
-                  onPressed: _busy
+                  onPressed: _busy || widget.post != null
                       ? null
                       : () => setState(() => _photos.remove(photo)),
                   icon: const Icon(Icons.close),
@@ -226,7 +237,10 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                 tooltip: 'Desvincular observación',
                 onPressed: _busy
                     ? null
-                    : () => setState(() => _sighting = null),
+                    : () => setState(() {
+                        _sighting = null;
+                        _unlinked = true;
+                      }),
                 icon: const Icon(Icons.link_off),
               ),
             ),

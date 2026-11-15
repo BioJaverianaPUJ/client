@@ -21,6 +21,9 @@ class CommunityRepository {
   Future<CommunityPost> savePost(PostDraft draft, {String? id}) => _pending();
   Future<void> deletePost(String id) => _pending();
   Future<CommunityPost> like(String id, bool liked) => _pending();
+  Future<CommunityPost> vote(String id, String? type) => _pending();
+  Future<void> react(String id, String? emoji) => _pending();
+  Future<List<Map<String, dynamic>>> myReports() => _pending();
   Future<List<PostComment>> comments(String postId) => _pending();
   Future<void> saveComment(
     String postId,

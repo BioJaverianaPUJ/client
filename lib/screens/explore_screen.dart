@@ -1,3 +1,4 @@
+import '../widgets/species_reference_photos.dart';
 import 'package:flutter/material.dart';
 import '../state/app_scope.dart';
 import '../widgets/community_widgets.dart';
@@ -176,7 +177,9 @@ void showSpecies(
               if (specimen['notes'] != null) Text('${specimen['notes']}'),
             ],
             const SizedBox(height: 16),
-            const Text('Las imágenes de referencia aún no están disponibles.'),
+            SpeciesReferencePhotos(
+              name: species['scientificName'] as String? ?? '',
+            ),
           ],
         ),
       ),

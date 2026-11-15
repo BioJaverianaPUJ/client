@@ -178,13 +178,16 @@ class _PostCardState extends State<PostCard> {
     _post = widget.post;
   }
 
-  Future<void> _like() async {
+  Future<void> _like({bool dislike = false}) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final post = await AppScope.read(
-        context,
-      ).community.like(_post.id, !_post.liked);
+      final post = await AppScope.read(context).community.vote(
+        _post.id,
+        dislike
+            ? (_post.disliked ? null : 'DISLIKE')
+            : (_post.liked ? null : 'LIKE'),
+      );
       if (mounted) setState(() => _post = post);
     } catch (e) {
       if (mounted) showMessage(context, messageFor(e));
@@ -317,11 +320,20 @@ class _PostCardState extends State<PostCard> {
                   spacing: 8,
                   children: [
                     TextButton.icon(
-                      onPressed: _busy ? null : _like,
+                      onPressed: _busy ? null : () => _like(),
                       icon: Icon(
                         _post.liked ? Icons.favorite : Icons.favorite_border,
                       ),
                       label: Text('${_post.likes} Me gusta'),
+                    ),
+                    TextButton.icon(
+                      onPressed: _busy ? null : () => _like(dislike: true),
+                      icon: Icon(
+                        _post.disliked
+                            ? Icons.thumb_down
+                            : Icons.thumb_down_outlined,
+                      ),
+                      label: Text('${_post.dislikes} No me gusta'),
                     ),
                     TextButton.icon(
                       onPressed: () async {

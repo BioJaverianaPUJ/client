@@ -14,6 +14,13 @@ class ObservationRepository extends CommunityRepository {
 
   static Sighting decode(Map<String, dynamic> json, {String? jobStatus}) {
     final score = json['certainty'];
+    final similarity = json['similarityScore'];
+    final specimen = json['specimen'] as Map<String, dynamic>?;
+    final meetsCriteria =
+        similarity is num &&
+        similarity >= .25 &&
+        (json['observationType'] == 'ANIMAL' ||
+            (json['observationType'] == 'PLANT' && specimen != null));
     return Sighting(
       id: json['id'] as String,
       species:
@@ -24,15 +31,17 @@ class ObservationRepository extends CommunityRepository {
         (json['longitude'] as num).toDouble(),
       ),
       date: DateTime.parse(json['createdAt'] as String),
-      // checked means recognition completed; it does NOT certify RF-14.
+      // RF-14 uses similarity, not certainty; plants also require the server match.
       status: jobStatus == 'FAILED'
           ? Verification.failed
           : json['checked'] == true
-          ? Verification.unverified
+          ? (meetsCriteria ? Verification.verified : Verification.unverified)
           : Verification.processing,
       confidence: score is num && score >= 0 && score <= 1
           ? score.toDouble()
           : null,
+      similarity: similarity is num ? similarity.toDouble() : null,
+      specimen: specimen,
       animal: json['observationType'] == 'ANIMAL',
       reviewRequested: json['revisionRequested'] == true,
     );
@@ -95,17 +104,6 @@ class ObservationRepository extends CommunityRepository {
       throw const FeatureUnavailable(
         'La captura debe estar dentro del campus y tener una ubicación precisa.',
       );
-    }
-    final recent = await api.get('/observations?page=0&size=1');
-    final items = recent['content'] as List;
-    if (items.isNotEmpty) {
-      final previous = DateTime.parse(items.first['createdAt'] as String);
-      if (DateTime.now().toUtc().difference(previous) <
-          const Duration(minutes: 5)) {
-        throw const FeatureUnavailable(
-          'Espera cinco minutos desde tu última observación antes de enviar otra.',
-        );
-      }
     }
     final signed = await api.post(
       '/observations/upload-presign',

@@ -137,7 +137,7 @@ void main() {
     },
   );
   test(
-    'capture uploads once, creates a non-blocking job and enforces cooldown',
+    'capture uploads once, creates a non-blocking job and handles server cooldown without retrying',
     () async {
       var recent = false;
       final calls = <String>[];
@@ -156,6 +156,9 @@ void main() {
             );
           }
           if (r.method == 'PUT') return http.Response('', 200);
+          if (r.method == 'POST' && recent) {
+            return http.Response('{"message":"Wait before retry"}', 429);
+          }
           if (r.method == 'GET') {
             return http.Response(
               jsonEncode({
@@ -195,18 +198,18 @@ void main() {
         DateTime.now(),
       );
       expect(result.status, Verification.processing);
-      expect(calls.length, 4);
+      expect(calls.length, 3);
       recent = true;
       await expectLater(
         repo.submit(photo, const LatLng(4.6286, -74.0637), 3, DateTime.now()),
         throwsException,
       );
-      expect(calls.length, 5);
+      expect(calls.length, 6);
       await expectLater(
         repo.submit(photo, const LatLng(4.65, -74.08), 3, DateTime.now()),
         throwsException,
       );
-      expect(calls.length, 5);
+      expect(calls.length, 6);
       api.close();
     },
   );

@@ -28,6 +28,8 @@ class Sighting {
     required this.date,
     required this.status,
     this.confidence,
+    this.similarity,
+    this.specimen,
     this.animal = false,
     this.published = false,
     this.reviewRequested = false,
@@ -37,7 +39,8 @@ class Sighting {
   final LatLng point;
   final DateTime date;
   final Verification status;
-  final double? confidence;
+  final double? confidence, similarity;
+  final Map<String, dynamic>? specimen;
   final bool animal, published, reviewRequested;
   final DateTime? retryAt;
   bool get canPublish =>
@@ -57,6 +60,9 @@ class CommunityPost {
     this.images = const [],
     this.avatar,
     this.sighting,
+    this.observationId,
+    this.dislikes = 0,
+    this.disliked = false,
     this.likes = 0,
     this.comments = 0,
     this.liked = false,
@@ -66,7 +72,9 @@ class CommunityPost {
   final List<String> images;
   final String? avatar;
   final Sighting? sighting;
-  final int likes, comments;
+  final String? observationId;
+  final int likes, dislikes, comments;
+  final bool disliked;
   final bool liked;
 }
 
@@ -77,13 +85,18 @@ class PostDraft {
     this.photos = const [],
     this.retainedImages = const [],
     this.sighting,
+    this.observationId,
   });
   final String title, text;
   final List<LocalPhoto> photos;
   final List<String> retainedImages;
   final Sighting? sighting;
+  final String? observationId;
   String? validate() {
     if (title.trim().isEmpty) return 'Escribe un título para la publicación.';
+    if (title.trim().length > 200 || text.trim().length > 200) {
+      return 'El título y el texto admiten hasta 200 caracteres cada uno.';
+    }
     if (photos.length + retainedImages.length > 10) {
       return 'Puedes incluir hasta diez imágenes.';
     }
@@ -101,11 +114,13 @@ class PostComment {
     required this.authorName,
     required this.text,
     required this.date,
+    this.reactions = 0,
     this.parentId,
   });
   final String id, authorId, authorName, text;
   final DateTime date;
   final String? parentId;
+  final int reactions;
 }
 
 class FeedPage {

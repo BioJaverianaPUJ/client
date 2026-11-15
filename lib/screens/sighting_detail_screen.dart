@@ -92,6 +92,20 @@ class _SightingDetailScreenState extends State<SightingDetailScreen> {
           Text(
             'Confianza: ${_item.confidence == null ? 'No disponible' : '${(_item.confidence! * 100).toStringAsFixed(1)} %'}',
           ),
+          Text(
+            'Similitud: ${_item.similarity?.toStringAsFixed(3) ?? 'No disponible'}',
+          ),
+          if (_item.status == Verification.verified &&
+              _item.specimen != null) ...[
+            const Text(
+              'Espécimen oficial asociado',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text('Altura: ${_item.specimen!['height'] ?? 'No disponible'} m'),
+            Text(
+              'Circunferencia: ${_item.specimen!['circumference'] ?? 'No disponible'}',
+            ),
+          ],
           Text('Ubicación: ${_item.point.latitude}, ${_item.point.longitude}'),
           Text('Fecha: ${dateLabel(_item.date.toLocal())}'),
           Text(
@@ -130,7 +144,7 @@ class _SightingDetailScreenState extends State<SightingDetailScreen> {
             ),
           if (_item.status == Verification.unverified)
             const Text(
-              'El reconocimiento terminó. El servidor aún no informa una verificación oficial por confianza y proximidad.',
+              'El resultado no cumple los criterios de similitud y asociación con un espécimen del SRS, o no contiene los datos necesarios.',
             ),
           if (_item.status == Verification.failed &&
               AppScope.read(context).community.observationRetryAvailable) ...[
