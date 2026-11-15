@@ -1,3 +1,5 @@
+> **Versión actual integrada en main:** [funciones, tecnologías, pruebas y pendientes](docs/VERSION_ACTUAL.md). Autor: Brayan Fajardo.
+
 > Estado actualizado: [integración del 15 de noviembre de 2026](docs/INTEGRACION_2026_11_15.md). Incluye funciones conectadas y bloqueos reales del backend.
 
 # BioJaveriana — aplicación móvil
