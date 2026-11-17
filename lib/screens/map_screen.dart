@@ -1,3 +1,5 @@
+import '../theme/bio_theme.dart';
+import 'campus_3d_screen.dart';
 import 'dart:async';
 import '../config/campus_reference.dart';
 import '../config/map_config.dart';
@@ -229,7 +231,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         ),
       ],
       body: ListView(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
         children: [
           const BioPageHeading(
             eyebrow: 'Mapa del campus',
@@ -453,79 +455,132 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               ),
             ),
           ),
-          Wrap(
-            spacing: 8,
+          const SizedBox(height: 18),
+          Row(
             children: [
-              FilledButton.icon(
-                onPressed: _locating ? null : () => _locate(),
-                icon: const Icon(Icons.my_location),
-                label: Text(_locating ? 'Buscando ubicación…' : 'Mi ubicación'),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _locating ? null : () => _locate(),
+                  icon: _locating
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.my_location),
+                  label: Text(_locating ? 'Buscando…' : 'Mi ubicación'),
+                ),
               ),
-              TextButton.icon(
-                icon: const Icon(Icons.school_outlined),
-                label: const Text('Campus'),
-                onPressed: () {
-                  if (_boundary.length >= 3) {
-                    _map.fitCamera(
-                      CameraFit.bounds(
-                        bounds: LatLngBounds.fromPoints(_boundary),
-                        padding: const EdgeInsets.all(24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.school_outlined),
+                  label: const Text('Ver campus'),
+                  onPressed: () => _map.fitCamera(
+                    CameraFit.bounds(
+                      bounds: LatLngBounds.fromPoints(
+                        _boundary.length >= 3 ? _boundary : campusReference,
                       ),
-                    );
-                  } else {
-                    _map.fitCamera(
-                      CameraFit.bounds(
-                        bounds: LatLngBounds.fromPoints(campusReference),
-                        padding: const EdgeInsets.all(24),
-                      ),
-                    );
-                  }
-                },
-              ),
-              TextButton(
-                onPressed: () => Geolocator.openAppSettings(),
-                child: const Text('Permisos'),
+                      padding: const EdgeInsets.all(24),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
-          ExpansionTile(
-            title: const Text('Capas del mapa'),
-            subtitle: const Text('Elige qué quieres explorar'),
-            children: [
-              CheckboxListTile(
-                value: _plants,
-                onChanged: (v) => setState(() => _plants = v!),
-                title: const Text('Especímenes oficiales de plantas'),
-              ),
-              CheckboxListTile(
-                value: _showAnimals,
-                onChanged:
-                    AppScope.read(context).community.observationsAvailable
-                    ? (v) => setState(() => _showAnimals = v!)
-                    : null,
-                title: const Text('Mis observaciones de animales'),
-              ),
-              CheckboxListTile(
-                value: _green,
-                onChanged: _onlineLayers
-                    ? (v) => setState(() => _green = v!)
-                    : null,
-                title: const Text('Zonas verdes'),
-              ),
-              CheckboxListTile(
-                value: _interest,
-                onChanged: _onlineLayers
-                    ? (v) => setState(() => _interest = v!)
-                    : null,
-                title: const Text('Zonas de interés'),
-              ),
-            ],
+          const SizedBox(height: 20),
+          BioGlassAction(
+            title: 'Explorar campus en 3D',
+            subtitle: 'Recorre los edificios en volumen, gira e inclina la vista.',
+            icon: Icons.view_in_ar_outlined,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const Campus3DScreen()),
+            ),
           ),
+          const SizedBox(height: 20),
+          BioGlassCard(
+            margin: EdgeInsets.zero,
+            child: Theme(
+              data: Theme.of(
+                context,
+              ).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: const EdgeInsets.fromLTRB(20, 6, 16, 6),
+                childrenPadding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+                leading: const Icon(
+                  Icons.layers_outlined,
+                  color: BioTheme.lime,
+                ),
+                title: const Text(
+                  'Capas del mapa',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text(
+                  'Elige qué quieres explorar',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: BioTheme.textSecondary,
+                  ),
+                ),
+                children: [
+                  _LayerTile(
+                    icon: Icons.park_outlined,
+                    color: const Color(0xFF9CCB72),
+                    title: 'Especímenes oficiales de plantas',
+                    value: _plants,
+                    onChanged: (v) => setState(() => _plants = v),
+                  ),
+                  _LayerTile(
+                    icon: Icons.pets_outlined,
+                    color: Colors.orange,
+                    title: 'Mis observaciones de animales',
+                    value: _showAnimals,
+                    onChanged:
+                        AppScope.read(context).community.observationsAvailable
+                        ? (v) => setState(() => _showAnimals = v)
+                        : null,
+                  ),
+                  _LayerTile(
+                    icon: Icons.grass_outlined,
+                    color: Colors.green,
+                    title: 'Zonas verdes',
+                    value: _green,
+                    onChanged: _onlineLayers
+                        ? (v) => setState(() => _green = v)
+                        : null,
+                  ),
+                  _LayerTile(
+                    icon: Icons.place_outlined,
+                    color: Colors.purpleAccent,
+                    title: 'Zonas de interés',
+                    value: _interest,
+                    onChanged: _onlineLayers
+                        ? (v) => setState(() => _interest = v)
+                        : null,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => Geolocator.openAppSettings(),
+                        icon: const Icon(Icons.settings_outlined, size: 18),
+                        label: const Text('Permisos de ubicación'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           if (!_onlineLayers)
             const Padding(
-              padding: EdgeInsets.all(12),
+              padding: EdgeInsets.fromLTRB(8, 4, 8, 12),
               child: Text(
                 'Perímetro de referencia de OpenStreetMap. El límite oficial y las zonas están pendientes de publicación.',
+                style: TextStyle(fontSize: 12, color: BioTheme.textSecondary),
               ),
             ),
           if (_error != null)
@@ -545,4 +600,37 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       ),
     );
   }
+}
+
+class _LayerTile extends StatelessWidget {
+  const _LayerTile({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
+  final IconData icon;
+  final Color color;
+  final String title;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  @override
+  Widget build(BuildContext context) => CheckboxListTile(
+    value: value,
+    onChanged: onChanged == null ? null : (v) => onChanged!(v ?? false),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+    visualDensity: VisualDensity.compact,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    secondary: Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .16),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(icon, size: 18, color: color),
+    ),
+    title: Text(title, style: const TextStyle(fontSize: 14)),
+  );
 }

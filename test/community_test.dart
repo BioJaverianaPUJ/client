@@ -273,6 +273,8 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Publicar'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Publicar'));
     await tester.pumpAndSettle();
     expect(repo.saves, 0);
@@ -288,6 +290,8 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Publicar'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Publicar'));
     await tester.pumpAndSettle();
     expect(repo.saves, 1);

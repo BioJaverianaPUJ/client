@@ -27,8 +27,8 @@ class UserProfile {
       email: text('email'),
       role: text('role'),
       gender: Gender.fromApi(json['gender']),
-      profilePictureUrl: json['profilePictureUrl'] as String?,
-      bannerUrl: json['bannerUrl'] as String?,
+      profilePictureUrl: _url(json['profilePictureUrl']),
+      bannerUrl: _url(json['bannerUrl']),
     );
   }
 
@@ -44,4 +44,10 @@ class UserProfile {
 
   String get fullName =>
       [firstName, lastName].where((part) => part.isNotEmpty).join(' ');
+}
+
+/// El backend puede enviar "" o espacios cuando no hay imagen.
+String? _url(Object? value) {
+  final text = value is String ? value.trim() : '';
+  return text.isEmpty ? null : text;
 }

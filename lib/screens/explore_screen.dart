@@ -1,6 +1,8 @@
+import '../widgets/species_symbol.dart';
 import '../widgets/species_reference_photos.dart';
 import 'package:flutter/material.dart';
 import '../state/app_scope.dart';
+import '../theme/bio_theme.dart';
 import '../widgets/community_widgets.dart';
 
 class ExploreScreen extends StatefulWidget {
@@ -67,6 +69,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
     return CommunityScaffold(
       title: 'Catálogo de especies',
+      // Fondo limpio: solo un acento discreto de aves.
+      illustration: 'scattered_birds',
+      illustrationOpacity: .1,
       body: RefreshIndicator(
         onRefresh: () => _load(reset: true),
         child: ListView(
@@ -81,6 +86,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ),
             TextField(
               controller: _search,
+              textInputAction: TextInputAction.search,
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
                 labelText: 'Buscar entre las especies cargadas',
@@ -90,15 +96,48 @@ class _ExploreScreenState extends State<ExploreScreen> {
             const SizedBox(height: 16),
             for (final species in items)
               BioGlassCard(
-                child: ListTile(
-                  leading: const Icon(Icons.park_outlined),
-                  title: Text(
-                    '${species['commonName'] ?? species['scientificName']}',
-                  ),
-                  subtitle: Text(
-                    '${species['scientificName']} · ${species['family']}',
-                  ),
+                margin: const EdgeInsets.only(bottom: 10),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(30),
                   onTap: () => showSpecies(context, species),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                    child: Row(
+                      children: [
+                        SpeciesSymbol(species),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${species['commonName'] ?? species['scientificName']}',
+                                style: const TextStyle(
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${species['scientificName'] ?? ''}',
+                                style: const TextStyle(
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 12.5,
+                                  color: BioTheme.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              _GroupTag(species),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: BioTheme.lime,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             if (_busy) const Center(child: CircularProgressIndicator()),
@@ -126,6 +165,47 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 }
 
+class _GroupTag extends StatelessWidget {
+  const _GroupTag(this.species);
+  final Map<String, dynamic> species;
+  @override
+  Widget build(BuildContext context) {
+    final group = SpeciesGroups.of(species);
+    final family = '${species['family'] ?? ''}'.trim();
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
+      children: [
+        _Tag(group.label, group.color),
+        if (family.isNotEmpty) _Tag(family, BioTheme.textMuted),
+      ],
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  const _Tag(this.text, this.color);
+  final String text;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .12),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: color.withValues(alpha: .35)),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w700,
+        color: color,
+      ),
+    ),
+  );
+}
+
 void showSpecies(
   BuildContext context,
   Map<String, dynamic> species, {
@@ -142,13 +222,26 @@ void showSpecies(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '${species['commonName'] ?? species['scientificName']}',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            Text(
-              '${species['scientificName'] ?? ''}',
-              style: const TextStyle(fontStyle: FontStyle.italic),
+            Row(
+              children: [
+                SpeciesSymbol(species, size: 56),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${species['commonName'] ?? species['scientificName']}',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      Text(
+                        '${species['scientificName'] ?? ''}',
+                        style: const TextStyle(fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Text('Familia: ${species['family'] ?? 'Sin información'}'),

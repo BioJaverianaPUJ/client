@@ -6,51 +6,125 @@ import 'glass/glass_icon.dart';
 import 'glass/liquid_glass.dart';
 
 /// Decorative layers stay behind content and never intercept gestures.
+///
+/// Las ilustraciones grandes se anclan al borde derecho y quedan cortadas
+/// casi por la mitad, para que se vean grandes sin competir con el contenido.
 class BioScene extends StatelessWidget {
   const BioScene({
     super.key,
     required this.child,
     this.illustration = 'lush_tree',
+    this.opacity,
   });
   final Widget child;
-  final String illustration;
+
+  /// Nombre del archivo en assets/illustrations (sin extensión) o null para
+  /// un fondo limpio solo con degradado.
+  final String? illustration;
+  final double? opacity;
+
   @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      const Positioned.fill(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment(1, -.3),
-              radius: 1.4,
-              colors: [Color(0xFF124D40), BioTheme.backgroundDeep],
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final art = illustration;
+    return Stack(
+      children: [
+        const Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(1, -.3),
+                radius: 1.4,
+                colors: [Color(0xFF124D40), BioTheme.backgroundDeep],
+              ),
             ),
           ),
         ),
-      ),
-      BioIllustration(
-        asset: 'assets/illustrations/$illustration.png',
-        color: BioTheme.botanical,
-        opacity: .19,
-        right: -65,
-        top: 60,
-        width: 420,
-        height: 740,
-        fit: BoxFit.contain,
-      ),
-      const BioIllustration(
-        asset: 'assets/illustrations/treeline_reflection.png',
-        color: BioTheme.forest,
-        opacity: .13,
-        left: -50,
-        right: -50,
-        bottom: -50,
-        height: 250,
-        fit: BoxFit.cover,
-      ),
-      child,
-    ],
-  );
+        if (art != null) _artwork(art, size),
+        // Velo inferior: mantiene legible el contenido sobre la ilustración.
+        const Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0, .62, 1],
+                  colors: [
+                    Color(0x00002E29),
+                    Color(0x00002E29),
+                    Color(0x99002E29),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        child,
+      ],
+    );
+  }
+
+  Widget _artwork(String art, Size size) {
+    final w = size.width;
+    final asset = 'assets/illustrations/$art.png';
+    switch (art) {
+      // Cámara: rama con pájaro completa, de borde a borde, sin recortes.
+      case 'tree_branchs_bird':
+        return BioIllustration(
+          asset: asset,
+          color: BioTheme.botanical,
+          opacity: opacity ?? .2,
+          left: 0,
+          top: 70,
+          width: w,
+          height: w * 1024 / 1536,
+          fit: BoxFit.contain,
+          alignment: Alignment.topCenter,
+        );
+      // Perfil: los dos pájaros completos, como estaban antes.
+      case 'layered_birds':
+        return BioIllustration(
+          asset: asset,
+          color: BioTheme.botanical,
+          opacity: opacity ?? .16,
+          left: 0,
+          top: 65,
+          width: w * 1.65,
+          height: size.height * 1.15,
+          fit: BoxFit.contain,
+          alignment: Alignment.topCenter,
+        );
+      // Acento pequeño para pantallas que deben verse limpias.
+      case 'scattered_birds':
+      case 'flock_birds':
+        return BioIllustration(
+          asset: asset,
+          color: BioTheme.botanical,
+          opacity: opacity ?? .14,
+          right: -w * .12,
+          top: 70,
+          width: w * .85,
+          height: w * .5,
+          fit: BoxFit.contain,
+          alignment: Alignment.topRight,
+        );
+      default:
+        final artWidth = w * 1.3;
+        return BioIllustration(
+          asset: asset,
+          color: BioTheme.botanical,
+          opacity: opacity ?? .16,
+          // El centro de la ilustración queda sobre el borde derecho.
+          left: w - artWidth * .5,
+          top: 56,
+          width: artWidth,
+          height: size.height * 1.1,
+          fit: BoxFit.contain,
+          alignment: Alignment.topCenter,
+        );
+    }
+  }
 }
 
 class BioGlassCard extends StatelessWidget {

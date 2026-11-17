@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/api_config.dart';
 import '../services/api_exception.dart';
 import '../services/community_repository.dart';
 import '../theme/bio_theme.dart';
@@ -49,23 +50,38 @@ class CommunityScaffold extends StatelessWidget {
     this.tab,
     this.actions,
     this.floatingActionButton,
+    this.illustration,
+    this.illustrationOpacity,
   });
   final String title;
   final Widget body;
   final BioTab? tab;
   final List<Widget>? actions;
   final Widget? floatingActionButton;
-  String get illustration => switch (tab) {
-    BioTab.home => 'radiant_column',
-    BioTab.map => 'flock_birds',
-    BioTab.identify => 'floral_frame',
-    BioTab.profile => 'layered_birds',
-    BioTab.gamification => 'engraved_birds_branches',
-    _ => title.contains('observacion') ? 'bare_tree' : 'lush_tree',
-  };
+
+  /// Permite que una pantalla elija su propio fondo. Usa '' para un fondo
+  /// limpio sin ilustración.
+  final String? illustration;
+  final double? illustrationOpacity;
+
+  String? get _illustration {
+    final custom = illustration;
+    if (custom != null) return custom.isEmpty ? null : custom;
+    return switch (tab) {
+      BioTab.home => 'radiant_column',
+      BioTab.map => 'flock_birds',
+      BioTab.identify => 'tree_branchs_bird',
+      BioTab.profile => 'layered_birds',
+      BioTab.gamification => 'engraved_birds_branches',
+      BioTab.explore => 'scattered_birds',
+      _ => title.contains('observacion') ? 'bare_tree' : 'lush_tree',
+    };
+  }
+
   @override
   Widget build(BuildContext context) => BioScene(
-    illustration: illustration,
+    illustration: _illustration,
+    opacity: illustrationOpacity,
     child: Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -138,31 +154,51 @@ class StatusPanel extends StatelessWidget {
 }
 
 class RemotePhoto extends StatelessWidget {
-  const RemotePhoto(this.url, {super.key, this.height = 280});
+  const RemotePhoto(this.url, {super.key, this.height = 280, this.fallback});
   final String url;
   final double height;
+
+  /// Se muestra si la imagen no se puede descargar.
+  final Widget? fallback;
+
+  /// Convierte rutas relativas del backend ("/media/x.jpg") en URL completas.
+  static String resolve(String url) {
+    final value = url.trim();
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.hasScheme) return value;
+    return Uri.parse(ApiConfig.baseUrl).resolve(value).toString();
+  }
+
   @override
-  Widget build(BuildContext context) => Image.network(
-    url,
-    height: height,
-    width: double.infinity,
-    fit: BoxFit.cover,
-    errorBuilder: (_, _, _) => SizedBox(
+  Widget build(BuildContext context) {
+    final resolved = resolve(url);
+    return Image.network(
+      resolved,
       height: height,
-      child: const Center(
-        child: Icon(
-          Icons.broken_image_outlined,
-          semanticLabel: 'Imagen no disponible',
-        ),
-      ),
-    ),
-    loadingBuilder: (_, child, progress) => progress == null
-        ? child
-        : SizedBox(
-            height: height,
-            child: const Center(child: CircularProgressIndicator()),
-          ),
-  );
+      width: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (_, error, _) {
+        // Aparece en la consola de `flutter run` para diagnosticar el backend.
+        debugPrint('RemotePhoto: no se pudo cargar "$resolved" → $error');
+        return fallback ??
+            SizedBox(
+              height: height,
+              child: const Center(
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  semanticLabel: 'Imagen no disponible',
+                ),
+              ),
+            );
+      },
+      loadingBuilder: (_, child, progress) => progress == null
+          ? child
+          : SizedBox(
+              height: height,
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+    );
+  }
 }
 
 String dateLabel(DateTime date) =>

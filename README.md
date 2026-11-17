@@ -1,4 +1,5 @@
 > **Versión actual integrada en main:** [funciones, tecnologías, pruebas y pendientes](docs/VERSION_ACTUAL.md). Autor: Brayan Fajardo.
+> Revisión más reciente: [backend y puntos de interés — 16 de noviembre](docs/REVISION_BACKEND_2026_11_16.md). Mejoras visuales y vista 3D: [17 de noviembre](docs/MEJORAS_VISUALES_Y_3D.md).
 
 > Estado actualizado: [integración del 15 de noviembre de 2026](docs/INTEGRACION_2026_11_15.md). Incluye funciones conectadas y bloqueos reales del backend.
 

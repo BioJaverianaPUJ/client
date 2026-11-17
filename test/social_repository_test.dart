@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:latlong2/latlong.dart';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -26,6 +27,34 @@ http.Response json(Object value, [int status = 200]) => http.Response(
   headers: {'content-type': 'application/json'},
 );
 void main() {
+  test(
+    'telemetry sends precise coordinates once and accepts an empty deduplicated response',
+    () async {
+      var calls = 0;
+      final api = ApiClient(
+        httpClient: MockClient((request) async {
+          calls++;
+          expect(request.method, 'POST');
+          expect(request.url.path.endsWith('/pois/telemetry'), true);
+          expect(jsonDecode(request.body), {
+            'latitude': 4.6286,
+            'longitude': -74.0637,
+          });
+          return json([]);
+        }),
+      );
+      final repo = SocialRepository(api);
+      const point = LatLng(4.6286, -74.0637);
+      for (final accuracy in [double.nan, double.infinity, -1.0, 5.1]) {
+        await repo.visit(point, accuracy);
+      }
+      expect(calls, 0);
+      await repo.visit(point, 5);
+      expect(calls, 1);
+      api.close();
+    },
+  );
+
   test(
     'feed expands summaries, keeps pagination and both vote counts',
     () async {
