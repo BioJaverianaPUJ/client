@@ -2,6 +2,7 @@ import 'reports_screen.dart';
 import 'account_screen.dart';
 import '../widgets/profile_experience.dart';
 import 'package:flutter/material.dart';
+import '../theme/bio_theme.dart';
 import '../widgets/glass/glass_icon.dart';
 import '../models/user_profile.dart';
 import '../models/community.dart';
@@ -117,28 +118,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (user.bannerUrl != null)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(24),
-                  child: RemotePhoto(user.bannerUrl!, height: 160),
+                  child: RemotePhoto(
+                    user.bannerUrl!,
+                    height: 160,
+                    fallback: const _BannerPlaceholder(
+                      message: 'No pudimos cargar tu banner',
+                    ),
+                  ),
                 )
               else
-                const BioGlassCard(
-                  frosted: true,
-                  padding: EdgeInsets.all(24),
-                  child: Column(
-                    children: [
-                      GlassIcon(
-                        icon: Icons.eco_outlined,
-                        size: 52,
-                        iconSize: 27,
-                      ),
-                      SizedBox(height: 12),
-                      Text(
-                        'EXPLORADOR JAVERIANO',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(letterSpacing: 2, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                ),
+                const _BannerPlaceholder(),
               const SizedBox(height: 16),
               BioGlassCard(
                 frosted: true,
@@ -155,6 +144,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             child: RemotePhoto(
                               user.profilePictureUrl!,
                               height: 96,
+                              fallback: const ColoredBox(
+                                color: Color(0x332F6B5A),
+                                child: Center(
+                                  child: Icon(
+                                    Icons.person_outline,
+                                    size: 44,
+                                    color: BioTheme.lime,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -485,6 +484,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
         return null;
       },
+    ),
+  );
+}
+
+/// Banner por defecto (también se usa si la imagen del banner no carga).
+class _BannerPlaceholder extends StatelessWidget {
+  const _BannerPlaceholder({this.message});
+  final String? message;
+  @override
+  Widget build(BuildContext context) => BioGlassCard(
+    frosted: true,
+    margin: EdgeInsets.zero,
+    padding: const EdgeInsets.all(24),
+    child: SizedBox(
+      width: double.infinity,
+      child: Column(
+        children: [
+          const GlassIcon(icon: Icons.eco_outlined, size: 52, iconSize: 27),
+          const SizedBox(height: 12),
+          const Text(
+            'EXPLORADOR JAVERIANO',
+            textAlign: TextAlign.center,
+            style: TextStyle(letterSpacing: 2, fontSize: 11),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              message!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: BioTheme.textSecondary,
+              ),
+            ),
+          ],
+        ],
+      ),
     ),
   );
 }

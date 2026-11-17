@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../state/session_controller.dart';
 import '../services/location_service.dart';
+import '../config/campus_reference.dart';
 
 /// Reports visits only while the signed-in application is in the foreground.
 /// Permission is requested from the camera/map screens, never on login.
@@ -68,12 +69,9 @@ class _CampusVisitTrackerState extends State<CampusVisitTracker>
       }
       final point = LatLng(position.latitude, position.longitude);
       final repo = widget.session.community;
-      final zones = await repo.zones();
-      if (!mounted || generation != _generation) return;
-      final entered = zones
-          .where((zone) => LocationService.inside(point, zone.points))
-          .toList();
-      if (entered.isNotEmpty) {
+      // The server checks exact radii and polygons and deduplicates visits.
+      // Keep location reporting limited to the campus reference area.
+      if (LocationService.inside(point, campusReference)) {
         await repo.visit(point, position.accuracy);
       }
     } catch (_) {

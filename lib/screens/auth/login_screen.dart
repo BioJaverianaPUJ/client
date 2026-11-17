@@ -10,7 +10,8 @@ import '../../widgets/auth/auth_message.dart';
 import '../../widgets/auth/glass_text_field.dart';
 import '../../widgets/bio_illustration.dart';
 import '../../widgets/glass/glass_button.dart';
-import '../../widgets/glass/soft_frost_glass.dart';
+import '../../theme/glass_tokens.dart';
+import '../../widgets/glass/liquid_glass.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -114,20 +115,23 @@ class _LoginScreenState extends State<LoginScreen> {
           height: 430,
           fit: BoxFit.fill,
         ),
-        const BioIllustration(
+        // Rama con el pájaro: queda detrás de la tarjeta (ahora casi
+        // transparente) para que se vea a través del vidrio.
+        BioIllustration(
           asset: 'assets/illustrations/raven_branch.png',
-          color: Color(0xFF91A96F),
-          opacity: 0.37,
-          right: -35,
-          top: 207,
-          width: 250,
-          height: 195,
+          color: const Color(0xFF9BB377),
+          opacity: 0.62,
+          right: -92,
+          top: 212,
+          width: width * 0.82,
+          height: width * 0.82 * 941 / 1672,
           flipHorizontally: true,
         ),
       ],
       children: [
         const SizedBox(height: 27),
-        SoftFrostGlass(
+        LiquidGlass(
+          material: GlassMaterial.airy,
           borderRadius: 40,
           padding: const EdgeInsets.fromLTRB(22, 27, 22, 21),
           child: AutofillGroup(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/community.dart';
+import '../widgets/photo_capture_guide.dart';
 import '../theme/bio_theme.dart';
 import '../widgets/glass/glass_icon.dart';
 import '../services/photo_service.dart';
@@ -113,129 +114,216 @@ class _IdentifyScreenState extends State<IdentifyScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => CommunityScaffold(
-    title: 'Cámara',
-    tab: BioTab.identify,
-    body: ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        const BioPageHeading(
-          eyebrow: 'Identifica una especie',
-          title: 'Descubre qué',
-          accent: 'estás viendo.',
-          description:
-              'Toma una fotografía de una planta o un animal dentro del campus. Necesitamos cámara y ubicación para registrar la observación.',
-        ),
-        if (_photo != null)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Image.memory(_photo!.bytes, height: 300, fit: BoxFit.cover),
-          )
-        else
-          BioGlassCard(
-            frosted: true,
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  child: Text(
-                    'IDENTIFICACIÓN',
-                    style: TextStyle(letterSpacing: 2, color: BioTheme.lime),
+  Widget build(BuildContext context) {
+    final available = AppScope.watch(context).community.observationsAvailable;
+    return CommunityScaffold(
+      title: 'Cámara',
+      tab: BioTab.identify,
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+        children: [
+          const BioPageHeading(
+            eyebrow: 'Identifica una especie',
+            title: 'Descubre qué',
+            accent: 'estás viendo.',
+            description:
+                'Toma una fotografía de una planta o un animal dentro del campus. Necesitamos cámara y ubicación para registrar la observación.',
+          ),
+          if (_photo != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Stack(
+                children: [
+                  Image.memory(
+                    _photo!.bytes,
+                    height: 320,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
                   ),
-                ),
-                Container(
-                  constraints: const BoxConstraints(minHeight: 270),
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: BioTheme.backgroundDeep.withValues(alpha: .48),
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(
-                      color: BioTheme.lime.withValues(alpha: .4),
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(24),
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      GlassIcon(
-                        icon: Icons.camera_alt_outlined,
-                        size: 68,
-                        iconSize: 34,
+                  Positioned(
+                    left: 12,
+                    bottom: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
                       ),
-                      SizedBox(height: 24),
-                      Text(
-                        'Encuadra una especie',
-                        textAlign: TextAlign.center,
+                      decoration: BoxDecoration(
+                        color: BioTheme.backgroundDeep.withValues(alpha: .72),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Foto lista para identificar',
                         style: TextStyle(
-                          fontSize: 22,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700,
+                          color: BioTheme.lime,
                         ),
                       ),
-                      SizedBox(height: 10),
-                      Text(
-                        'Animales, plantas y árboles',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: BioTheme.textSecondary),
-                      ),
-                    ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            BioGlassCard(
+              frosted: true,
+              margin: EdgeInsets.zero,
+              padding: const EdgeInsets.all(14),
+              child: SizedBox(
+                height: 250,
+                child: CustomPaint(
+                  painter: _ViewfinderPainter(),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GlassIcon(
+                          icon: Icons.camera_alt_outlined,
+                          size: 64,
+                          iconSize: 32,
+                        ),
+                        SizedBox(height: 20),
+                        Text(
+                          'Encuadra una especie',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Plantas, árboles y animales',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: BioTheme.textSecondary),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.only(top: 16, bottom: 6),
-                  child: Text('Una foto, un descubrimiento'),
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: 16),
-        if (_location != null)
-          Text(
-            'Ubicación: ${_location!.latitude.toStringAsFixed(6)}, ${_location!.longitude.toStringAsFixed(6)} · precisión ${_location!.accuracy.toStringAsFixed(1)} m',
-          ),
-        FilledButton.icon(
-          onPressed: _busy ? null : _capture,
-          icon: const Icon(Icons.camera_alt),
-          label: Text(_photo == null ? 'Tomar fotografía' : 'Volver a tomar'),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Solo se admite una fotografía tomada con la cámara. Las imágenes de galería se reservan para publicaciones.',
-        ),
-        const SizedBox(height: 16),
-        if (!AppScope.watch(context).community.observationsAvailable)
-          const BioGlassCard(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'La identificación de especies aún no está disponible. Puedes comprobar la cámara y la ubicación, pero la captura no se enviará ni se guardará como observación.',
               ),
             ),
+          const SizedBox(height: 16),
+          const PhotoCaptureGuide(),
+          const SizedBox(height: 18),
+          if (_location != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.place_outlined,
+                    size: 16,
+                    color: BioTheme.lime,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${_location!.latitude.toStringAsFixed(5)}, ${_location!.longitude.toStringAsFixed(5)} · precisión ${_location!.accuracy.toStringAsFixed(1)} m',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: BioTheme.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (_photo != null) ...[
+            FilledButton.icon(
+              onPressed: _busy || !available ? null : _send,
+              icon: const Icon(Icons.auto_awesome_outlined),
+              label: const Text('Identificar y guardar'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _capture,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Volver a tomar'),
+            ),
+          ] else
+            FilledButton.icon(
+              onPressed: _busy ? null : _capture,
+              icon: const Icon(Icons.camera_alt),
+              label: const Text('Tomar fotografía'),
+            ),
+          if (_busy) ...[
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: const LinearProgressIndicator(minHeight: 4),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                _stage,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: BioTheme.textSecondary),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          const Text(
+            'Solo se admite una fotografía tomada con la cámara. Las imágenes de galería se reservan para publicaciones.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: BioTheme.textMuted),
           ),
-        if (_busy) ...[
-          const LinearProgressIndicator(),
-          Padding(padding: const EdgeInsets.all(12), child: Text(_stage)),
+          if (!available)
+            const BioGlassCard(
+              margin: EdgeInsets.only(top: 16),
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'La identificación de especies aún no está disponible. Puedes comprobar la cámara y la ubicación, pero la captura no se enviará ni se guardará como observación.',
+                ),
+              ),
+            ),
+          if (_error != null)
+            StatusPanel(
+              title: 'No pudimos completar la captura',
+              message: messageFor(_error!),
+              icon: Icons.info_outline,
+            ),
+          const SizedBox(height: 4),
+          Center(
+            child: TextButton.icon(
+              onPressed: () => Geolocator.openAppSettings(),
+              icon: const Icon(Icons.settings_outlined, size: 18),
+              label: const Text('Revisar permisos del dispositivo'),
+            ),
+          ),
         ],
-        if (_error != null)
-          StatusPanel(
-            title: 'No pudimos completar la captura',
-            message: messageFor(_error!),
-            icon: Icons.info_outline,
-          ),
-        if (_photo != null)
-          FilledButton(
-            onPressed:
-                _busy ||
-                    !AppScope.watch(context).community.observationsAvailable
-                ? null
-                : _send,
-            child: const Text('Identificar y guardar observación'),
-          ),
-        TextButton(
-          onPressed: () => Geolocator.openAppSettings(),
-          child: const Text('Revisar permisos del dispositivo'),
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
+}
+
+/// Esquinas tipo visor de cámara para el área de captura.
+class _ViewfinderPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = BioTheme.lime.withValues(alpha: .7)
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    const inset = 14.0;
+    const arm = 30.0;
+    const l = inset, t = inset;
+    final r = size.width - inset, b = size.height - inset;
+    for (final (x, y, dx, dy) in [
+      (l, t, 1.0, 1.0),
+      (r, t, -1.0, 1.0),
+      (l, b, 1.0, -1.0),
+      (r, b, -1.0, -1.0),
+    ]) {
+      canvas
+        ..drawLine(Offset(x, y), Offset(x + arm * dx, y), paint)
+        ..drawLine(Offset(x, y), Offset(x, y + arm * dy), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

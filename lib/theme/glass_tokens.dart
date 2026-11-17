@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-enum GlassMaterial { clear, regular, frosted }
+enum GlassMaterial { airy, clear, regular, frosted }
 
 @immutable
 class GlassTokens {
@@ -31,10 +31,37 @@ class GlassTokens {
   final List<BoxShadow> shadows;
 
   static GlassTokens of(GlassMaterial material) => switch (material) {
+    GlassMaterial.airy => airy,
     GlassMaterial.clear => clear,
     GlassMaterial.regular => regular,
     GlassMaterial.frosted => frosted,
   };
+
+  /// Almost-transparent glass: lets the illustrations behind it show through.
+  static const airy = GlassTokens(
+    blurSigma: 0.6,
+    fill: Color.fromRGBO(30, 84, 72, 0.045),
+    veil: Color.fromRGBO(208, 234, 220, 0.025),
+    sheen: [
+      Color.fromRGBO(206, 234, 214, 0.06),
+      Color.fromRGBO(206, 234, 214, 0.012),
+      Color.fromRGBO(0, 26, 22, 0),
+      Color.fromRGBO(0, 26, 22, 0.08),
+    ],
+    borderWidth: 0.75,
+    borderLight: Color.fromRGBO(226, 246, 232, 0.44),
+    borderDark: Color.fromRGBO(140, 186, 158, 0.05),
+    highlight: Color.fromRGBO(232, 248, 236, 0.34),
+    rimLight: Color.fromRGBO(236, 250, 240, 0.06),
+    rimDark: Color.fromRGBO(0, 20, 17, 0.10),
+    shadows: [
+      BoxShadow(
+        color: Color.fromRGBO(0, 16, 13, 0.10),
+        offset: Offset(0, 3),
+        blurRadius: 10,
+      ),
+    ],
+  );
 
   static const clear = GlassTokens(
     blurSigma: 2,
