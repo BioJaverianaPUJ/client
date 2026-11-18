@@ -5,8 +5,6 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-import java.util.Properties
-
 // Load release signing properties
 val keystorePropertiesFile = rootProject.file("app/key.properties")
 val keystoreProperties = Properties()
@@ -18,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.biolens"
+    namespace = "com.biojaveriana.client"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -28,7 +26,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.biolens"
+        applicationId = "com.biojaveriana.client"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

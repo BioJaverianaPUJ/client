@@ -140,7 +140,7 @@ The workflow (`.github/workflows/android-release.yml`) triggers in two scenarios
 - Check that the secret name is exactly `ANDROID_KEYSTORE_BASE64` (case-sensitive)
 
 ### APK does not install on device
-- Make sure you uninstall any debug version first: `adb uninstall com.example.biolens`
+- Make sure you uninstall any debug version first: `adb uninstall com.biojaveriana.client`
 - The release APK uses a different signature than debug
 
 ### Workflow does not trigger on push

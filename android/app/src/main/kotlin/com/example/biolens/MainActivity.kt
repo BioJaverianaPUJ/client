@@ -1,4 +1,4 @@
-package com.example.biolens
+package com.biojaveriana.client
 
 import io.flutter.embedding.android.FlutterActivity
 
