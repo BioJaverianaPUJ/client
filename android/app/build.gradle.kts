@@ -4,6 +4,21 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Load signing config from key.properties
+val keystorePropertiesFile = file("key.properties")
+val signingConfig = if (keystorePropertiesFile.exists()) {
+    val keystoreProperties = java.util.Properties()
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
+    android.registerSigningConfig("release") {
+        storeFile = file(keystoreProperties["storeFile"] as String)
+        storePassword = keystoreProperties["storePassword"] as String
+        keyAlias = keystoreProperties["keyAlias"] as String
+        keyPassword = keystoreProperties["keyPassword"] as String
+    }
+} else {
+    null
+}
+
 android {
     namespace = "com.example.biolens"
     compileSdk = flutter.compileSdkVersion
@@ -27,8 +42,9 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            signingConfig = signingConfig ?: signingConfigs.getByName("debug")
+        }
+        debug {
             signingConfig = signingConfigs.getByName("debug")
         }
     }

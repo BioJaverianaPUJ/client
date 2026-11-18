@@ -44,4 +44,10 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Android keystore for release builds (DO NOT COMMIT)
+android/app/key.properties
+android/app/release.keystore
+
 /config.local.json
+# Widget Preview related
+.widget_preview/
