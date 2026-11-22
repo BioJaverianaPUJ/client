@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../config/map_config.dart';
 import '../models/community.dart';
 import '../state/app_scope.dart';
 import '../theme/bio_theme.dart';
 import '../widgets/community_widgets.dart';
+import 'map_screen.dart';
 import 'post_editor_screen.dart';
 
 class SightingDetailScreen extends StatefulWidget {
@@ -93,6 +95,16 @@ class _SightingDetailScreenState extends State<SightingDetailScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Ubicación del espécimen oficial con el que se verificó la observación.
+  LatLng? get _specimenPoint {
+    final specimen = _item.specimen;
+    if (_item.status != Verification.verified || specimen == null) return null;
+    final lat = specimen['latitude'], lng = specimen['longitude'];
+    return lat is num && lng is num
+        ? LatLng(lat.toDouble(), lng.toDouble())
+        : null;
   }
 
   Widget _hero() {
@@ -439,6 +451,23 @@ class _SightingDetailScreenState extends State<SightingDetailScreen> {
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
               child: LinearProgressIndicator(),
+            ),
+          if (_specimenPoint case final point?)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: FilledButton.tonalIcon(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MapScreen(focusPoint: point),
+                  ),
+                ),
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Ver espécimen en el mapa'),
+              ),
             ),
           if (_item.canPublish && community.available)
             FilledButton.icon(

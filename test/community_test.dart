@@ -5,6 +5,7 @@ import 'package:biojaveriana/models/auth_session.dart';
 import 'package:biojaveriana/models/community.dart';
 import 'package:biojaveriana/screens/gamification_screen.dart';
 import 'package:biojaveriana/screens/home_screen.dart';
+import 'package:biojaveriana/screens/map_screen.dart';
 import 'package:biojaveriana/screens/profile_screen.dart';
 import 'package:biojaveriana/screens/xp_history_screen.dart';
 import 'package:biojaveriana/widgets/post_comments.dart';
@@ -467,6 +468,143 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('El espécimen de una planta verificada se marca en el mapa', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 860);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    Map<String, dynamic> page(List<Map<String, dynamic>> rows) => {
+      'content': rows,
+      'pagination': {'page': 0, 'size': 100, 'totalPages': 1},
+    };
+    const specimen = {
+      'id': 's-verde',
+      'speciesId': 'sp1',
+      'latitude': 4.6286,
+      'longitude': -74.0637,
+    };
+    final backend = FakeBackend()
+      ..on('GET', '/users/me', (_) => json(profileJson()))
+      ..on(
+        'GET',
+        '/specimens',
+        (_) => json(
+          page([
+            specimen,
+            {
+              'id': 's-otro',
+              'speciesId': 'sp1',
+              'latitude': 4.6290,
+              'longitude': -74.0640,
+            },
+          ]),
+        ),
+      )
+      ..on(
+        'GET',
+        '/species',
+        (_) => json(
+          page([
+            {
+              'id': 'sp1',
+              'scientificName': 'Quercus humboldtii',
+              'commonName': 'Roble',
+              'family': 'Fagaceae',
+            },
+          ]),
+        ),
+      );
+    final session = SessionController(
+      api: ApiClient(
+        httpClient: backend.client,
+        baseUrl: 'https://api.test/api/v1',
+      ),
+      storage: MemorySessionStorage(AuthSession.fromJson(sessionJson())),
+      autoRefresh: false,
+      community: _VerifiedCommunity(
+        Sighting(
+          id: 'o1',
+          species: 'Roble',
+          photo: '',
+          point: const LatLng(4.6286, -74.0637),
+          date: DateTime(2026, 11, 22),
+          status: Verification.verified,
+          similarity: 0.8,
+          specimen: specimen,
+        ),
+      ),
+    );
+    addTearDown(session.dispose);
+    await session.restore();
+    await tester.pumpWidget(
+      AppScope(
+        session: session,
+        child: MaterialApp(theme: BioTheme.dark, home: const MapScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.bySemanticsLabel(RegExp('Espécimen verificado por ti')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'Se puede mencionar con @ en el título y la descripción del post',
+    (tester) async {
+      final repo = TestCommunity();
+      await setup(tester, const PostEditorScreen(), repo: repo);
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), 'Con @cam');
+      await tester.pumpAndSettle();
+      expect(find.text('camilo'), findsOneWidget);
+      await tester.tap(find.text('camilo'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(fields.at(0)).controller!.text,
+        'Con @camilo ',
+      );
+      await tester.enterText(fields.at(1), 'Gracias @lau');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('laura'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(fields.at(1)).controller!.text,
+        'Gracias @laura ',
+      );
+    },
+  );
+
+  testWidgets('Una mención en la publicación abre el perfil', (tester) async {
+    final repo = TestCommunity();
+    await setup(
+      tester,
+      Scaffold(
+        body: ListView(
+          children: [
+            PostCard(
+              post: CommunityPost(
+                id: 'p9',
+                authorId: 'u1',
+                authorName: 'ana',
+                title: 'Paseo con @camilo',
+                text: 'Lo vimos juntos.',
+                date: DateTime(2026, 11, 22),
+              ),
+              onChanged: () {},
+            ),
+          ],
+        ),
+      ),
+      repo: repo,
+    );
+    await tester.tapOnText(find.textRange.ofSubstring('@camilo'));
+    await tester.pumpAndSettle();
+    expect(repo.openedMention, 'camilo');
+    expect(find.byType(ProfileScreen), findsOneWidget);
+  });
+
   testWidgets('Suspensión invalida sesión y muestra aviso específico', (
     tester,
   ) async {
@@ -482,4 +620,15 @@ void main() {
     expect(storage.session, isNull);
     expect(find.textContaining('Tu cuenta está suspendida'), findsOneWidget);
   });
+}
+
+class _VerifiedCommunity extends TestCommunity {
+  _VerifiedCommunity(this.sighting);
+  final Sighting sighting;
+  @override
+  Future<List<Sighting>> sightings() async => [sighting];
+  @override
+  Future<List<LatLng>> campusBoundary() async => const [];
+  @override
+  Future<List<CampusZone>> zones() async => const [];
 }

@@ -23,8 +23,11 @@ import '../widgets/species_symbol.dart';
 import '../navigation/app_routes.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key, this.focusZone});
+  const MapScreen({super.key, this.focusZone, this.focusPoint});
   final CampusZone? focusZone;
+
+  /// Punto a centrar al abrir (por ejemplo, un espécimen verificado).
+  final LatLng? focusPoint;
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
@@ -40,6 +43,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Set<String> _missionZones = const {};
   List<Sighting> _animals = [];
   Set<String> _verifiedSpecimens = {};
+  // Especímenes que la persona verificó con sus observaciones (id → datos).
+  Map<String, Map<String, dynamic>> _verifiedData = {};
   LatLng? _position;
   bool _plants = true, _showAnimals = true, _green = true, _interest = true;
   bool _loading = true, _locating = false, _more = false, _onlineLayers = false;
@@ -144,13 +149,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         final animals = await session.community.sightings();
         if (mounted) {
           setState(() {
-            _verifiedSpecimens = animals
-                .where(
-                  (s) =>
-                      s.status == Verification.verified && s.specimen != null,
-                )
-                .map((s) => s.specimen!['id'] as String)
-                .toSet();
+            _verifiedData = {
+              for (final s in animals)
+                if (s.status == Verification.verified &&
+                    s.specimen?['id'] is String)
+                  s.specimen!['id'] as String: s.specimen!,
+            };
+            _verifiedSpecimens = _verifiedData.keys.toSet();
             _animals = animals
                 .where(
                   (s) =>
@@ -280,6 +285,25 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       ? _specimens
       : _specimens.where((s) => _groupOf(s).label == _groupFilter).toList();
 
+  /// Especímenes sin los verificados por la persona (esos van aparte).
+  List<Map<String, dynamic>> get _clusteredSpecimens => _visibleSpecimens
+      .where((s) => !_verifiedSpecimens.contains(s['id']))
+      .toList();
+
+  /// Especímenes verificados: los del catálogo o, si no están en él, los
+  /// datos que trae la observación.
+  List<Map<String, dynamic>> get _verifiedVisible {
+    final byId = {for (final s in _specimens) '${s['id']}': s};
+    return [
+      for (final entry in _verifiedData.entries)
+        if ((byId[entry.key] ?? entry.value) case final s
+            when s['latitude'] is num &&
+                s['longitude'] is num &&
+                (_groupFilter == null || _groupOf(s).label == _groupFilter))
+          s,
+    ];
+  }
+
   /// Grupos presentes en el mapa con su cantidad, del más al menos común.
   List<(SpeciesGroup, int)> get _groupsPresent {
     final m = <String, (SpeciesGroup, int)>{};
@@ -314,6 +338,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             marker: const _ClusterPin(count: 5, color: BioTheme.lime, size: 30),
             label: 'Varios ejemplares juntos',
             detail: 'Toca para acercar',
+          ),
+          const _LegendRow(
+            marker: _VerifiedPin(group: SpeciesGroups.plant, size: 30),
+            label: 'Especímenes que verificaste',
+            detail: 'Tus observaciones confirmadas',
           ),
           const _LegendRow(
             marker: _AnimalPin(size: 30),
@@ -566,10 +595,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                       mapController: _map,
                       options: MapOptions(
                         initialCenter:
+                            widget.focusPoint ??
                             widget.focusZone?.points.firstOrNull ??
                             const LatLng(4.6282, -74.0644),
-                        initialZoom: 17,
-                        initialCameraFit: widget.focusZone == null
+                        initialZoom: widget.focusPoint != null ? 19 : 17,
+                        initialCameraFit:
+                            widget.focusZone == null &&
+                                widget.focusPoint == null
                             ? CameraFit.bounds(
                                 bounds: LatLngBounds.fromPoints(
                                   campusAllPoints,
@@ -677,7 +709,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                           markers: [
                             if (_plants)
                               for (final cluster in clusterSpecimens(
-                                _visibleSpecimens,
+                                _clusteredSpecimens,
                                 _zoom,
                               ))
                                 cluster.items.length == 1
@@ -723,6 +755,28 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                           ),
                                         ),
                                       ),
+                            // Verificados por la persona: siempre visibles.
+                            if (_plants)
+                              for (final s in _verifiedVisible)
+                                Marker(
+                                  point: LatLng(
+                                    (s['latitude'] as num).toDouble(),
+                                    (s['longitude'] as num).toDouble(),
+                                  ),
+                                  width: 54,
+                                  height: 54,
+                                  child: Semantics(
+                                    button: true,
+                                    label:
+                                        'Espécimen verificado por ti: ${_groupOf(s).label}',
+                                    child: GestureDetector(
+                                      onTap: () => _detail(s),
+                                      child: Center(
+                                        child: _VerifiedPin(group: _groupOf(s)),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                             if (_showAnimals)
                               for (final animal in _animals)
                                 Marker(
@@ -1092,6 +1146,71 @@ class _SpecimenPin extends StatelessWidget {
       ],
     ),
     child: Icon(group.icon, size: size * .55, color: BioTheme.backgroundDeep),
+  );
+}
+
+/// Espécimen que la persona verificó: aro lima y marca de verificación.
+class _VerifiedPin extends StatelessWidget {
+  const _VerifiedPin({required this.group, this.size = 42});
+  final SpeciesGroup group;
+  final double size;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size + 8,
+    height: size + 8,
+    child: Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        Container(
+          width: size + 6,
+          height: size + 6,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: BioTheme.lime.withValues(alpha: 0.35),
+          ),
+        ),
+        Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: group.color,
+            border: Border.all(color: BioTheme.lime, width: 3),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x88000000),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(
+            group.icon,
+            size: size * .5,
+            color: BioTheme.backgroundDeep,
+          ),
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: size * .42,
+            height: size * .42,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: BioTheme.lime,
+              border: Border.all(color: BioTheme.backgroundDeep, width: 2),
+            ),
+            child: Icon(
+              Icons.check_rounded,
+              size: size * .28,
+              color: BioTheme.backgroundDeep,
+            ),
+          ),
+        ),
+      ],
+    ),
   );
 }
 

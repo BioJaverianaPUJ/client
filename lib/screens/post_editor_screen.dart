@@ -6,6 +6,7 @@ import '../state/app_scope.dart';
 import '../theme/bio_theme.dart';
 import '../widgets/community_widgets.dart';
 import '../widgets/post_card.dart' show LinkedObservation, PostPreviewCard;
+import '../widgets/post_comments.dart' show MentionSuggestions;
 
 class PostEditorScreen extends StatefulWidget {
   const PostEditorScreen({super.key, this.post, this.sighting});
@@ -408,6 +409,8 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
           hintText: 'Ej.: Un colibrí en el jardín central',
         ),
       ),
+      // Escribe @ para mencionar a alguien en el título o la descripción.
+      MentionSuggestions(controller: _title),
       const SizedBox(height: 12),
       TextField(
         controller: _text,
@@ -419,10 +422,12 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
         textCapitalization: TextCapitalization.sentences,
         decoration: const InputDecoration(
           labelText: 'Descripción *',
-          hintText: 'Cuéntanos qué viste, dónde y cuándo.',
+          hintText:
+              'Cuéntanos qué viste, dónde y cuándo. Usa @ para mencionar.',
           alignLabelWithHint: true,
         ),
       ),
+      MentionSuggestions(controller: _text),
       const SizedBox(height: 16),
       _observation(),
       const SizedBox(height: 14),

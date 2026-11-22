@@ -358,6 +358,18 @@ class _PostCardState extends State<PostCard>
     );
   }
 
+  void _openMention(String username) => openMention(
+    context,
+    username,
+    known: [
+      MentionUser(
+        id: _post.authorId,
+        username: _post.authorName,
+        avatar: _post.avatar,
+      ),
+    ],
+  );
+
   Widget _caption() {
     final long = _post.text.length > 140 || '\n'.allMatches(_post.text).length > 2;
     return Padding(
@@ -382,8 +394,9 @@ class _PostCardState extends State<PostCard>
             style: const TextStyle(color: BioTheme.textPrimary, fontSize: 13.5),
           ),
           const SizedBox(height: 8),
-          Text(
+          MentionText(
             _post.title,
+            onMention: _openMention,
             style: const TextStyle(
               color: BioTheme.textPrimary,
               fontSize: 16,
@@ -402,8 +415,9 @@ class _PostCardState extends State<PostCard>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      MentionText(
                         _post.text,
+                        onMention: _openMention,
                         maxLines: _fullText ? null : 3,
                         overflow: _fullText
                             ? TextOverflow.visible

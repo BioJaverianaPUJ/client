@@ -154,9 +154,6 @@ class _PostCommentsSectionState extends State<PostCommentsSection> {
   Object? _error;
   bool _loading = true, _sending = false;
   int _visibleRoots = 3;
-  // Autocompletado de menciones: texto escrito después de "@".
-  String? _mentionQuery;
-  List<MentionUser> _people = const [];
 
   @override
   void initState() {
@@ -206,7 +203,6 @@ class _PostCommentsSectionState extends State<PostCommentsSection> {
     _replyTo = null;
     _replyName = null;
     _editing = null;
-    _mentionQuery = null;
     _text.clear();
   });
 
@@ -229,7 +225,6 @@ class _PostCommentsSectionState extends State<PostCommentsSection> {
         _editing = null;
         _replyTo = null;
         _replyName = null;
-        _mentionQuery = null;
         if (replyTo != null) _openReplies.add(replyTo.id);
       });
       await _load();
@@ -444,7 +439,7 @@ class _PostCommentsSectionState extends State<PostCommentsSection> {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    _MentionText(c.text, onMention: _openMention),
+                    MentionText(c.text, onMention: _openMention),
                     const SizedBox(height: 4),
                     Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -564,160 +559,19 @@ class _PostCommentsSectionState extends State<PostCommentsSection> {
     );
   }
 
-  static final _mentionAtCursor = RegExp(r'(?:^|\s)@([\wÀ-ÿ.]*)$');
+  /// Personas presentes en la publicación: el autor y quienes comentaron.
+  List<MentionUser> get _present => [
+    MentionUser(
+      id: widget.post.authorId,
+      username: widget.post.authorName,
+      avatar: widget.post.avatar,
+    ),
+    for (final c in _comments)
+      MentionUser(id: c.authorId, username: c.authorName, avatar: c.avatar),
+  ];
 
-  void _onTextChanged(String _) {
-    final cursor = _text.selection.baseOffset;
-    final before = cursor < 0 || cursor > _text.text.length
-        ? _text.text
-        : _text.text.substring(0, cursor);
-    final query = _mentionAtCursor.firstMatch(before)?.group(1);
-    setState(() => _mentionQuery = query);
-    if (query != null && _people.isEmpty) _loadPeople();
-  }
-
-  Future<void> _loadPeople() async {
-    try {
-      final people = await AppScope.read(context).community.mentionCandidates();
-      if (mounted) setState(() => _people = people);
-    } catch (_) {
-      // Sin la lista se sigue sugiriendo a quienes comentaron.
-    }
-  }
-
-  String _plain(String v) => v
-      .toLowerCase()
-      .replaceAll(RegExp('[áàä]'), 'a')
-      .replaceAll(RegExp('[éèë]'), 'e')
-      .replaceAll(RegExp('[íìï]'), 'i')
-      .replaceAll(RegExp('[óòö]'), 'o')
-      .replaceAll(RegExp('[úùü]'), 'u');
-
-  /// Sugerencias: primero quienes comentaron esta publicación (con foto).
-  List<MentionUser> get _suggestions {
-    final query = _mentionQuery;
-    if (query == null) return const [];
-    final q = _plain(query);
-    final me = _me;
-    final seen = <String>{};
-    final result = <MentionUser>[];
-    final here = [
-      MentionUser(
-        id: widget.post.authorId,
-        username: widget.post.authorName,
-        avatar: widget.post.avatar,
-      ),
-      for (final c in _comments)
-        MentionUser(id: c.authorId, username: c.authorName, avatar: c.avatar),
-    ];
-    for (final u in [...here, ..._people]) {
-      if (u.id == me || !seen.add(u.id)) continue;
-      final match =
-          q.isEmpty ||
-          _plain(u.username).contains(q) ||
-          _plain(u.name).contains(q);
-      if (match) result.add(u);
-      if (result.length == 6) break;
-    }
-    return result;
-  }
-
-  void _pickMention(MentionUser user) {
-    final cursor = _text.selection.baseOffset < 0
-        ? _text.text.length
-        : _text.selection.baseOffset;
-    final before = _text.text.substring(0, cursor);
-    final after = _text.text.substring(cursor);
-    final start = before.lastIndexOf('@');
-    final inserted = '${before.substring(0, start)}@${user.username} ';
-    _text.value = TextEditingValue(
-      text: inserted + after,
-      selection: TextSelection.collapsed(offset: inserted.length),
-    );
-    setState(() => _mentionQuery = null);
-  }
-
-  Widget _mentionList() {
-    final items = _suggestions;
-    if (items.isEmpty) return const SizedBox(width: double.infinity);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: BioTheme.backgroundDeep.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-        boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 18)],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final u in items)
-            InkWell(
-              borderRadius: BorderRadius.circular(18),
-              onTap: () => _pickMention(u),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    UserAvatar(name: u.username, url: u.avatar, size: 34),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            u.username,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: BioTheme.textPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                            ),
-                          ),
-                          if (u.name.isNotEmpty)
-                            Text(
-                              u.name,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: BioTheme.textMuted,
-                                fontSize: 12,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// Abre el perfil de una persona mencionada (@usuario).
-  Future<void> _openMention(String username) async {
-    final known = [
-      (widget.post.authorName, widget.post.authorId),
-      for (final c in _comments) (c.authorName, c.authorId),
-    ].where((e) => e.$1.toLowerCase() == username.toLowerCase());
-    if (known.isNotEmpty) return openProfile(context, known.first.$2);
-    try {
-      final id = await AppScope.read(context).community
-          .userIdByUsername(username);
-      if (!mounted) return;
-      if (id == null) {
-        showMessage(context, 'No encontramos a @$username.');
-      } else {
-        openProfile(context, id);
-      }
-    } catch (e) {
-      if (mounted) showMessage(context, messageFor(e));
-    }
-  }
+  void _openMention(String username) =>
+      openMention(context, username, known: _present);
 
   Widget _composer() {
     final user = AppScope.watch(context).user;
@@ -773,10 +627,7 @@ class _PostCommentsSectionState extends State<PostCommentsSection> {
                   ),
                 ),
         ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 160),
-          child: _mentionList(),
-        ),
+        MentionSuggestions(controller: _text, present: _present),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -804,7 +655,7 @@ class _PostCommentsSectionState extends State<PostCommentsSection> {
                   maxLength,
                 }) => null,
                 textCapitalization: TextCapitalization.sentences,
-                onChanged: _onTextChanged,
+                onChanged: (_) => setState(() {}),
                 style: const TextStyle(
                   fontSize: 14,
                   color: BioTheme.textPrimary,
@@ -979,17 +830,237 @@ class _TinyLink extends StatelessWidget {
   );
 }
 
-/// Resalta las menciones (@usuario) como en Instagram; al tocarlas se abre
-/// el perfil de esa persona.
-class _MentionText extends StatefulWidget {
-  const _MentionText(this.text, {required this.onMention});
-  final String text;
-  final ValueChanged<String> onMention;
-  @override
-  State<_MentionText> createState() => _MentionTextState();
+/// Abre el perfil de una persona mencionada (@usuario). [known] evita
+/// consultar al servidor cuando ya se sabe quién es.
+Future<void> openMention(
+  BuildContext context,
+  String username, {
+  List<MentionUser> known = const [],
+}) async {
+  final match = known.where(
+    (u) => u.username.toLowerCase() == username.toLowerCase(),
+  );
+  if (match.isNotEmpty) return openProfile(context, match.first.id);
+  try {
+    final id = await AppScope.read(context).community
+        .userIdByUsername(username);
+    if (!context.mounted) return;
+    if (id == null) {
+      showMessage(context, 'No encontramos a @$username.');
+    } else {
+      openProfile(context, id);
+    }
+  } catch (e) {
+    if (context.mounted) showMessage(context, messageFor(e));
+  }
 }
 
-class _MentionTextState extends State<_MentionText> {
+String _plainText(String v) => v
+    .toLowerCase()
+    .replaceAll(RegExp('[áàä]'), 'a')
+    .replaceAll(RegExp('[éèë]'), 'e')
+    .replaceAll(RegExp('[íìï]'), 'i')
+    .replaceAll(RegExp('[óòö]'), 'o')
+    .replaceAll(RegExp('[úùü]'), 'u');
+
+/// Lista de personas para completar una mención mientras se escribe "@" en
+/// [controller] (comentarios, título o descripción de una publicación).
+class MentionSuggestions extends StatefulWidget {
+  const MentionSuggestions({
+    super.key,
+    required this.controller,
+    this.present = const [],
+  });
+  final TextEditingController controller;
+
+  /// Personas que se sugieren primero (p. ej. quienes comentaron).
+  final List<MentionUser> present;
+  @override
+  State<MentionSuggestions> createState() => _MentionSuggestionsState();
+}
+
+class _MentionSuggestionsState extends State<MentionSuggestions> {
+  static final _atCursor = RegExp(r'(?:^|\s)@([\wÀ-ÿ.]*)$');
+  List<MentionUser> _people = const [];
+  bool _requested = false;
+  String? _query;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_changed);
+  }
+
+  @override
+  void didUpdateWidget(MentionSuggestions old) {
+    super.didUpdateWidget(old);
+    if (old.controller != widget.controller) {
+      old.controller.removeListener(_changed);
+      widget.controller.addListener(_changed);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() {
+    final value = widget.controller.value;
+    final cursor = value.selection.baseOffset;
+    final before = cursor < 0 || cursor > value.text.length
+        ? value.text
+        : value.text.substring(0, cursor);
+    final query = _atCursor.firstMatch(before)?.group(1);
+    if (query != _query) setState(() => _query = query);
+    if (query != null && !_requested) {
+      _requested = true;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    try {
+      final people = await AppScope.read(context).community.mentionCandidates();
+      if (mounted) setState(() => _people = people);
+    } catch (_) {
+      // Sin la lista se sugiere a quienes ya participan.
+    }
+  }
+
+  List<MentionUser> get _matches {
+    final query = _query;
+    if (query == null) return const [];
+    final q = _plainText(query);
+    final me = AppScope.read(context).user?.id;
+    final seen = <String>{};
+    final result = <MentionUser>[];
+    for (final u in [...widget.present, ..._people]) {
+      if (u.id == me || !seen.add(u.id)) continue;
+      if (q.isEmpty ||
+          _plainText(u.username).contains(q) ||
+          _plainText(u.name).contains(q)) {
+        result.add(u);
+      }
+      if (result.length == 6) break;
+    }
+    return result;
+  }
+
+  void _pick(MentionUser user) {
+    final controller = widget.controller;
+    final text = controller.text;
+    final cursor = controller.selection.baseOffset < 0
+        ? text.length
+        : controller.selection.baseOffset;
+    final before = text.substring(0, cursor);
+    final start = before.lastIndexOf('@');
+    final inserted = '${before.substring(0, start)}@${user.username} ';
+    controller.value = TextEditingValue(
+      text: inserted + text.substring(cursor),
+      selection: TextSelection.collapsed(offset: inserted.length),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _matches;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 160),
+      child: items.isEmpty
+          ? const SizedBox(width: double.infinity)
+          : Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: BioTheme.backgroundDeep.withValues(alpha: 0.96),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x55000000), blurRadius: 18),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final u in items)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () => _pick(u),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          children: [
+                            UserAvatar(
+                              name: u.username,
+                              url: u.avatar,
+                              size: 34,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    u.username,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: BioTheme.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  if (u.name.isNotEmpty)
+                                    Text(
+                                      u.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: BioTheme.textMuted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+/// Texto que resalta las menciones (@usuario) como en Instagram; al tocarlas
+/// se llama a [onMention] con el usuario.
+class MentionText extends StatefulWidget {
+  const MentionText(
+    this.text, {
+    super.key,
+    required this.onMention,
+    this.style = const TextStyle(
+      color: BioTheme.textPrimary,
+      fontSize: 14,
+      height: 1.35,
+    ),
+    this.maxLines,
+    this.overflow,
+  });
+  final String text;
+  final ValueChanged<String> onMention;
+  final TextStyle style;
+  final int? maxLines;
+  final TextOverflow? overflow;
+  @override
+  State<MentionText> createState() => _MentionTextState();
+}
+
+class _MentionTextState extends State<MentionText> {
   static final _pattern = RegExp(r'@([\wÀ-ÿ.]+)');
   final _recognizers = <TapGestureRecognizer>[];
 
@@ -1009,11 +1080,6 @@ class _MentionTextState extends State<_MentionText> {
   @override
   Widget build(BuildContext context) {
     _clear();
-    const base = TextStyle(
-      color: BioTheme.textPrimary,
-      fontSize: 14,
-      height: 1.35,
-    );
     final text = widget.text;
     final spans = <TextSpan>[];
     var last = 0;
@@ -1044,7 +1110,11 @@ class _MentionTextState extends State<_MentionText> {
       last = end;
     }
     if (last < text.length) spans.add(TextSpan(text: text.substring(last)));
-    return Text.rich(TextSpan(style: base, children: spans));
+    return Text.rich(
+      TextSpan(style: widget.style, children: spans),
+      maxLines: widget.maxLines,
+      overflow: widget.overflow,
+    );
   }
 }
 
