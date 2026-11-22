@@ -291,3 +291,15 @@ class XpHistoryPage {
   final List<XpHistoryEntry> items;
   final bool hasMore;
 }
+
+/// Persona que se puede mencionar con @ en un comentario.
+class MentionUser {
+  const MentionUser({
+    required this.id,
+    required this.username,
+    this.name = '',
+    this.avatar,
+  });
+  final String id, username, name;
+  final String? avatar;
+}

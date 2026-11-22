@@ -580,6 +580,72 @@ class SocialRepository extends ObservationRepository {
           .where((r) => r['active'] != false && r['visibility'] == 'PUBLIC')
           .map(decodeZone)
           .toList();
+  List<MentionUser>? _mentionCache;
+  DateTime? _mentionLoaded;
+
+  @override
+  Future<List<MentionUser>> mentionCandidates() async {
+    final fresh =
+        _mentionLoaded != null &&
+        DateTime.now().difference(_mentionLoaded!) < const Duration(minutes: 5);
+    if (_mentionCache != null && fresh) return _mentionCache!;
+    // El backend no tiene búsqueda: se carga la lista una vez y se filtra aquí.
+    final rows = await _all('/users');
+    _mentionLoaded = DateTime.now();
+    return _mentionCache = [
+      for (final r in rows)
+        if (r['id'] is String && r['username'] is String)
+          MentionUser(
+            id: r['id'] as String,
+            username: r['username'] as String,
+            name: '${r['firstName'] ?? ''} ${r['lastName'] ?? ''}'.trim(),
+            avatar: r['profilePictureUrl'] as String?,
+          ),
+    ];
+  }
+
+  @override
+  Future<String?> userIdByUsername(String username) async {
+    final cached = _mentionCache
+        ?.where((u) => u.username.toLowerCase() == username.toLowerCase())
+        .firstOrNull;
+    if (cached != null) return cached.id;
+    try {
+      final row = await api.get('/users/@${Uri.encodeComponent(username)}');
+      return row['id'] as String?;
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<Map<String, String>> rewardNames() async {
+    final names = <String, String>{};
+    try {
+      for (final a in await _all('/achievements/me')) {
+        if (a['slug'] is String && a['name'] is String) {
+          names['ACHIEVEMENT:${a['slug']}'] = a['name'] as String;
+        }
+      }
+    } catch (_) {}
+    try {
+      final board = await api.get('/missions/me');
+      final missions = [
+        for (final key in const ['daily', 'weekly', 'event'])
+          ...((board[key] as List?) ?? const []),
+        // Misiones de periodos anteriores que ya se completaron.
+        ...await _all('/missions/me/completed')
+            .catchError((Object _) => <Map<String, dynamic>>[]),
+      ];
+      for (final m in missions) {
+        if (m is Map && m['slug'] is String && m['name'] is String) {
+          names['MISSION:${m['slug']}'] = m['name'] as String;
+        }
+      }
+    } catch (_) {}
+    return names;
+  }
 
   /// Id de la zona de una misión: objeto `poi` (PoiSummaryResponse) o `poiId`.
   static String? missionZoneId(Map<String, dynamic> row) => switch (row) {

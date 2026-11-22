@@ -53,6 +53,15 @@ class CommunityRepository {
   Future<List<LatLng>> campusBoundary() => _pending();
   Future<List<CampusZone>> zones() => _pending();
 
+  /// Personas que se pueden mencionar con @ (lista para autocompletar).
+  Future<List<MentionUser>> mentionCandidates() async => const [];
+
+  /// Id de la cuenta con ese nombre de usuario (para abrir su perfil).
+  Future<String?> userIdByUsername(String username) async => null;
+
+  /// Nombres legibles de logros y misiones por su identificador (slug).
+  Future<Map<String, String>> rewardNames() async => const {};
+
   /// Zonas de interés asociadas a misiones activas de la persona.
   Future<Set<String>> missionZoneIds() async => const {};
   Future<void> visit(LatLng point, double accuracy) => _pending();

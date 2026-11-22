@@ -5,6 +5,9 @@ import 'package:biojaveriana/models/auth_session.dart';
 import 'package:biojaveriana/models/community.dart';
 import 'package:biojaveriana/screens/gamification_screen.dart';
 import 'package:biojaveriana/screens/home_screen.dart';
+import 'package:biojaveriana/screens/profile_screen.dart';
+import 'package:biojaveriana/screens/xp_history_screen.dart';
+import 'package:biojaveriana/widgets/post_comments.dart';
 import 'package:biojaveriana/screens/post_editor_screen.dart';
 import 'package:biojaveriana/services/api_client.dart';
 import 'package:biojaveriana/services/catalog_service.dart';
@@ -20,6 +23,52 @@ import 'package:latlong2/latlong.dart';
 import 'support/fakes.dart';
 
 class TestCommunity extends CommunityRepository {
+  String? openedMention;
+  @override
+  Future<List<PostComment>> comments(String postId) async => [
+    PostComment(
+      id: 'c1',
+      authorId: 'u-ana',
+      authorName: 'ana_bio',
+      text: 'Qué bonito, mira @camilo.',
+      date: DateTime(2026, 11, 22),
+    ),
+  ];
+  @override
+  Future<List<MentionUser>> mentionCandidates() async => const [
+    MentionUser(id: 'u-cam', username: 'camilo', name: 'Camilo Rojas'),
+    MentionUser(id: 'u-lau', username: 'laura', name: 'Laura Gómez'),
+  ];
+  @override
+  Future<String?> userIdByUsername(String username) async {
+    openedMention = username;
+    return username == 'camilo' ? 'u-cam' : null;
+  }
+
+  @override
+  Future<XpHistoryPage> xpHistory({int page = 0}) async => XpHistoryPage([
+    XpHistoryEntry(
+      id: 'x2',
+      amount: 15,
+      reason: 'MISSION:semana-verde',
+      totalAfter: 125,
+      levelAfter: 3,
+      date: DateTime.now(),
+    ),
+    XpHistoryEntry(
+      id: 'x1',
+      amount: 10,
+      reason: 'ACHIEVEMENT:primera-planta',
+      totalAfter: 110,
+      levelAfter: 2,
+      date: DateTime.now().subtract(const Duration(days: 1)),
+    ),
+  ], hasMore: false);
+  @override
+  Future<Map<String, String>> rewardNames() async => const {
+    'MISSION:semana-verde': 'Semana verde',
+  };
+
   bool rejectSave = false;
   int saves = 0;
   PostDraft? draft;
@@ -367,6 +416,55 @@ void main() {
     await tester.tap(find.byTooltip('Cerrar'));
     await tester.pumpAndSettle();
     expect(find.byType(ImageViewer), findsNothing);
+  });
+
+  testWidgets('Al escribir @ se sugieren personas y la mención abre perfiles', (
+    tester,
+  ) async {
+    final repo = TestCommunity();
+    await setup(
+      tester,
+      Scaffold(
+        body: ListView(
+          children: [
+            PostCommentsSection(post: repo.post, onCountChanged: (_) {}),
+          ],
+        ),
+      ),
+      repo: repo,
+    );
+    await tester.enterText(find.byType(TextField), 'Hola @la');
+    await tester.pumpAndSettle();
+    expect(find.text('laura'), findsOneWidget);
+    expect(find.text('camilo'), findsNothing);
+    await tester.tap(find.text('laura'));
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller!.text, 'Hola @laura ');
+    // Quien ya comentó aparece de primero al escribir solo "@".
+    await tester.enterText(find.byType(TextField), '@');
+    await tester.pumpAndSettle();
+    expect(find.text('ana_bio'), findsWidgets);
+    // Tocar la mención en un comentario abre el perfil de esa persona.
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pumpAndSettle();
+    await tester.tapOnText(find.textRange.ofSubstring('@camilo'));
+    await tester.pumpAndSettle();
+    expect(repo.openedMention, 'camilo');
+    expect(find.byType(ProfileScreen), findsOneWidget);
+  });
+
+  testWidgets('El historial de experiencia muestra nombres, días y niveles', (
+    tester,
+  ) async {
+    await setup(tester, const XpHistoryScreen(), repo: TestCommunity());
+    expect(find.text('Semana verde'), findsOneWidget);
+    expect(find.text('Primera planta'), findsOneWidget);
+    expect(find.text('HOY'), findsOneWidget);
+    expect(find.text('AYER'), findsOneWidget);
+    expect(find.textContaining('Subiste a nivel 3'), findsOneWidget);
+    expect(find.text('+15 XP'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Suspensión invalida sesión y muestra aviso específico', (
