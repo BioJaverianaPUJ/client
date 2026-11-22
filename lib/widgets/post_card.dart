@@ -474,12 +474,15 @@ class _PostCardState extends State<PostCard>
         padding: const EdgeInsets.fromLTRB(16, 10, 12, 12),
         child: Row(
           children: [
-            Text(
-              label,
-              style: const TextStyle(
-                color: BioTheme.textMuted,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: BioTheme.textMuted,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const SizedBox(width: 2),

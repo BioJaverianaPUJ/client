@@ -19,19 +19,16 @@ Position fix(double accuracy, {DateTime? timestamp}) => Position(
 );
 
 void main() {
-  test(
-    'waits for an accurate fresh fix instead of rejecting the first reading',
-    () async {
-      final readings = <double>[];
-      final position = await LocationService.waitForPrecisePosition(
-        Stream.fromIterable([fix(30), fix(8), fix(4)]),
-        now: () => instant,
-        onProgress: (p) => readings.add(p.accuracy),
-      );
-      expect(position.accuracy, 4);
-      expect(readings, [30, 8, 4]);
-    },
-  );
+  test('accepts the first good reading without waiting for 5 m', () async {
+    final readings = <double>[];
+    final position = await LocationService.waitForPrecisePosition(
+      Stream.fromIterable([fix(30), fix(8), fix(4)]),
+      now: () => instant,
+      onProgress: (p) => readings.add(p.accuracy),
+    );
+    expect(position.accuracy, 8);
+    expect(readings, [30, 8]);
+  });
   test('ignores stale, future and invalid fixes', () async {
     final readings = <double>[];
     final position = await LocationService.waitForPrecisePosition(
@@ -48,26 +45,29 @@ void main() {
     expect(position.accuracy, 5);
     expect(readings, [5]);
   });
-  test('timeout cancels GPS and preserves the accuracy requirement', () async {
+  test('an imprecise GPS never blocks: uses the best reading', () async {
     var cancelled = false;
     final stream = StreamController<Position>(onCancel: () => cancelled = true);
+    final pending = LocationService.waitForPrecisePosition(
+      stream.stream,
+      settle: const Duration(milliseconds: 30),
+      now: () => instant,
+    );
+    stream.add(fix(80));
+    stream.add(fix(45));
+    stream.add(fix(60));
+    expect((await pending).accuracy, 45);
+    expect(cancelled, true);
+    await stream.close();
+  });
+  test('fails only when no valid reading arrives', () async {
+    final stream = StreamController<Position>();
     final pending = LocationService.waitForPrecisePosition(
       stream.stream,
       timeout: const Duration(milliseconds: 30),
       now: () => instant,
     );
-    stream.add(fix(12));
-    await expectLater(
-      pending,
-      throwsA(
-        isA<FeatureUnavailable>().having(
-          (e) => e.message,
-          'message',
-          contains('12.0 m'),
-        ),
-      ),
-    );
-    expect(cancelled, true);
+    await expectLater(pending, throwsA(isA<FeatureUnavailable>()));
     await stream.close();
   });
   test('successful fix stops location subscription', () async {

@@ -2,6 +2,8 @@ import 'widgets/campus_visit_tracker.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 
 import 'navigation/app_routes.dart';
 import 'state/app_scope.dart';
@@ -10,9 +12,21 @@ import 'theme/bio_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await _highRefreshRate();
   final session = SessionController.create();
   await session.restore();
   runApp(BioJaverianaApp(session: session));
+}
+
+/// Android suele dejar las apps a 60 Hz aunque la pantalla soporte 90 o
+/// 120 Hz; se pide la frecuencia más alta con la resolución actual.
+Future<void> _highRefreshRate() async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+  try {
+    await FlutterDisplayMode.setHighRefreshRate();
+  } catch (_) {
+    // Pantallas sin modos alternativos: se mantiene la frecuencia actual.
+  }
 }
 
 class BioJaverianaApp extends StatefulWidget {

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../theme/bio_theme.dart';
 import '../widgets/level_badge.dart';
 import '../models/community.dart';
 import '../state/app_scope.dart';
@@ -42,40 +44,225 @@ class _GamificationScreenState extends State<GamificationScreen> {
     context,
     MaterialPageRoute(builder: (_) => MapScreen(focusZone: zone)),
   );
-  Widget _mission(Mission mission) => BioGlassCard(
+
+  static const _periodIcons = {
+    'Diarias': Icons.today_rounded,
+    'Semanales': Icons.date_range_rounded,
+    'De evento': Icons.celebration_rounded,
+    'Logros': Icons.emoji_events_rounded,
+  };
+
+  String _remaining(DateTime end) {
+    final left = end.difference(DateTime.now());
+    if (left.isNegative) return 'Terminó';
+    if (left.inDays >= 1) return 'Quedan ${left.inDays} d';
+    if (left.inHours >= 1) return 'Quedan ${left.inHours} h';
+    return 'Quedan ${left.inMinutes.clamp(1, 59)} min';
+  }
+
+  Widget _mission(Mission mission) {
+    final done = mission.completed;
+    final value = done
+        ? 1.0
+        : mission.target > 0
+        ? (mission.progress / mission.target).clamp(0.0, 1.0)
+        : 0.0;
+    return BioGlassCard(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: done
+                        ? BioTheme.lime
+                        : BioTheme.lime.withValues(alpha: .14),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    done
+                        ? Icons.check_rounded
+                        : _periodIcons[mission.period] ?? Icons.flag_rounded,
+                    color: done ? BioTheme.iconDark : BioTheme.lime,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        mission.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15.5,
+                        ),
+                      ),
+                      if (mission.description.isNotEmpty)
+                        Text(
+                          mission.description,
+                          style: const TextStyle(
+                            color: BioTheme.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: BioTheme.lime.withValues(alpha: .12),
+                  ),
+                  child: Text(
+                    '+${mission.xp} XP',
+                    style: const TextStyle(
+                      color: BioTheme.lime,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: value,
+                minHeight: 8,
+                backgroundColor: Colors.white.withValues(alpha: .1),
+                color: BioTheme.lime,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${mission.target > 0 ? '${mission.progress.clamp(0, mission.target)}/${mission.target}' : 'Progreso: ${mission.progress}'} · ${mission.xp} XP${done ? ' · Completada' : ''}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: BioTheme.textSecondary,
+                    ),
+                  ),
+                ),
+                if (mission.endsAt != null && !done)
+                  Text(
+                    _remaining(mission.endsAt!),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: BioTheme.textMuted,
+                    ),
+                  ),
+              ],
+            ),
+            if (mission.zone != null)
+              TextButton.icon(
+                onPressed: () => _zone(mission.zone!),
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Ver zona en el mapa'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _section(String title, {String? subtitle}) => Padding(
+    padding: const EdgeInsets.only(top: 22, bottom: 6),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleLarge),
+        if (subtitle != null)
+          Text(
+            subtitle,
+            style: const TextStyle(color: BioTheme.textMuted, fontSize: 12.5),
+          ),
+      ],
+    ),
+  );
+
+  Widget _curiosity(Curiosity curiosity) => BioGlassCard(
     child: Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(mission.title, style: Theme.of(context).textTheme.titleLarge),
-          Text(mission.description),
-          const SizedBox(height: 12),
-          Text(
-            '${mission.target > 0 ? '${mission.progress}/${mission.target}' : 'Progreso: ${mission.progress}'} · ${mission.xp} XP${mission.completed ? ' · Completada' : ''}',
+          const Row(
+            children: [
+              Icon(Icons.lightbulb_rounded, color: BioTheme.lime, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'DATO CURIOSO DEL DÍA',
+                  style: TextStyle(
+                    color: BioTheme.lime,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ],
           ),
-          if (mission.completed || mission.target > 0)
-            LinearProgressIndicator(
-              value: mission.completed
-                  ? 1
-                  : (mission.progress / mission.target).clamp(0.0, 1.0),
+          const SizedBox(height: 12),
+          Text(curiosity.title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(curiosity.description, style: const TextStyle(height: 1.45)),
+          if (curiosity.images.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 190,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: curiosity.images.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, i) => ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: SizedBox(
+                    width: curiosity.images.length == 1
+                        ? MediaQuery.sizeOf(context).width - 72
+                        : 250,
+                    child: RemotePhoto(curiosity.images[i], height: 190),
+                  ),
+                ),
+              ),
             ),
-          if (mission.endsAt != null)
-            Text('Disponible hasta ${dateLabel(mission.endsAt!.toLocal())}'),
-          if (mission.zone != null)
-            TextButton.icon(
-              onPressed: () => _zone(mission.zone!),
-              icon: const Icon(Icons.map_outlined),
-              label: const Text('Ver zona en el mapa'),
+          ],
+          if (curiosity.zone != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextButton.icon(
+                onPressed: () => _zone(curiosity.zone!),
+                icon: const Icon(Icons.map_outlined),
+                label: Text('Descubrir en el mapa · ${curiosity.zone!.name}'),
+              ),
             ),
         ],
       ),
     ),
   );
+
   @override
   Widget build(BuildContext context) {
     final data = _data;
     final curiosity = data?.curiosity;
+    // Pendientes primero; las completadas quedan al final de cada grupo.
+    List<Mission> sorted(Iterable<Mission> items) => [
+      ...items.where((m) => !m.completed),
+      ...items.where((m) => m.completed),
+    ];
     return CommunityScaffold(
       title: 'Gamificación',
       tab: BioTab.gamification,
@@ -88,95 +275,133 @@ class _GamificationScreenState extends State<GamificationScreen> {
               eyebrow: 'Cada descubrimiento cuenta',
               title: 'Explora. Aprende.',
               accent: 'Avanza.',
-              description:
-                  'Tus descubrimientos y visitas al campus se convierten en experiencia.',
+              description: 'Tus descubrimientos y visitas al campus se convierten en experiencia.',
             ),
-            if (curiosity != null)
+            if (data != null)
               BioGlassCard(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('DATO CURIOSO DEL DÍA'),
-                      const SizedBox(height: 12),
-                      Text(
-                        curiosity.title,
-                        style: Theme.of(context).textTheme.titleLarge,
+                      Row(
+                        children: [
+                          LevelBadge(level: data.level, size: 58),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Nivel ${data.level} · ${badgeName(data.level)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 17,
+                                  ),
+                                ),
+                                Text(
+                                  '${data.xp} puntos de experiencia',
+                                  style: const TextStyle(
+                                    color: BioTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(curiosity.description),
-                      for (final image in curiosity.images)
-                        RemotePhoto(image, height: 180),
-                      if (curiosity.zone != null)
-                        TextButton(
-                          onPressed: () => _zone(curiosity.zone!),
-                          child: const Text('Descubrir en el mapa'),
+                      if (data.levelProgress != null) ...[
+                        const SizedBox(height: 14),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: data.levelProgress,
+                            minHeight: 9,
+                            backgroundColor: Colors.white.withValues(alpha: .1),
+                            color: BioTheme.lime,
+                          ),
                         ),
+                        if (data.nextLevelXp != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              'Siguiente nivel a los ${data.nextLevelXp} XP',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: BioTheme.textMuted,
+                              ),
+                            ),
+                          ),
+                      ],
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          icon: const Icon(Icons.history),
+                          label: const Text('Ver historial de experiencia'),
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const XpHistoryScreen(),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
+            if (curiosity != null) _curiosity(curiosity),
             if (data != null) ...[
-              ListTile(
-                leading: LevelBadge(level: data.level, size: 52),
-                title: Text('Nivel ${data.level} · ${badgeName(data.level)}'),
-                subtitle: Text('${data.xp} puntos de experiencia'),
-              ),
-              TextButton.icon(
-                icon: const Icon(Icons.history),
-                label: const Text('Ver historial de experiencia'),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const XpHistoryScreen()),
-                ),
-              ),
               if (!data.missionsAvailable)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                    'Las misiones por periodo no están disponibles en este servidor.',
+                    'Las misiones no están disponibles en este momento.',
                   ),
                 ),
               if (data.missionsAvailable)
-                for (final period in ['Diarias', 'Semanales', 'De evento']) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(
-                      'Misiones $period',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  for (final mission in data.missions.where(
-                    (m) => m.period == period && !m.completed,
+                for (final (period, subtitle) in const [
+                  ('Diarias', 'Se renuevan cada día'),
+                  ('Semanales', 'Se renuevan cada semana'),
+                  ('De evento', 'Solo por tiempo limitado'),
+                ]) ...[
+                  _section('Misiones $period', subtitle: subtitle),
+                  for (final mission in sorted(
+                    data.missions.where((m) => m.period == period),
                   ))
                     _mission(mission),
-                  if (!data.missions.any(
-                    (m) => m.period == period && !m.completed,
-                  ))
+                  if (!data.missions.any((m) => m.period == period))
                     const Text(
-                      'No tienes misiones pendientes en este periodo.',
+                      'No hay misiones en este periodo.',
+                      style: TextStyle(color: BioTheme.textMuted),
                     ),
                 ],
-              const SizedBox(height: 20),
-              Text(
-                'Logros por completar',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              _section('Logros por completar'),
               for (final achievement in data.achievements.where(
                 (a) => !a.completed,
               ))
                 _mission(achievement),
-              const SizedBox(height: 20),
-              Text(
-                'Logros obtenidos',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              if (!data.achievements.any((a) => !a.completed))
+                const Text(
+                  '¡Completaste todos los logros disponibles!',
+                  style: TextStyle(color: BioTheme.textMuted),
+                ),
+              _section('Logros obtenidos'),
               for (final achievement in data.achievements.where(
                 (a) => a.completed,
               ))
                 _mission(achievement),
+              if (!data.achievements.any((a) => a.completed))
+                const Text(
+                  'Aún no tienes logros. ¡Registra tu primera observación!',
+                  style: TextStyle(color: BioTheme.textMuted),
+                ),
             ],
-            if (_busy) const Center(child: CircularProgressIndicator()),
+            if (_busy)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Center(child: CircularProgressIndicator()),
+              ),
             if (_error != null)
               StatusPanel(
                 title: 'Tus próximos retos están por llegar',

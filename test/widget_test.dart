@@ -214,13 +214,16 @@ void main() {
       find.textContaining('Crear cuenta', findRichText: true),
     );
     await tester.scrollUntilVisible(
-      find.text('Política de tratamiento de datos'),
+      find.text('Leer la política de tratamiento de datos'),
       350,
       scrollable: find.byType(Scrollable).first,
     );
     expect(tester.takeException(), isNull);
-    await tapVisible(tester, find.text('Política de tratamiento de datos'));
-    expect(find.textContaining('aún no está disponible'), findsOneWidget);
+    await tapVisible(
+      tester,
+      find.text('Leer la política de tratamiento de datos'),
+    );
+    expect(find.text('Leí y acepto la política'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

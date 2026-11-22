@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+
 import '../models/community.dart';
 import '../widgets/photo_capture_guide.dart';
 import '../theme/bio_theme.dart';
@@ -44,7 +45,7 @@ class _IdentifyScreenState extends State<IdentifyScreen> {
       setState(() {
         _photo = photos.single;
         _capturedAt = capturedAt;
-        _stage = 'Afinando GPS; permanece en el lugar de la foto...';
+        _stage = 'Obteniendo la ubicación de la foto…';
       });
       await _locatePhoto();
     } catch (e) {
@@ -67,7 +68,7 @@ class _IdentifyScreenState extends State<IdentifyScreen> {
         if (mounted) {
           setState(
             () => _stage =
-                'Precisión GPS: ${position.accuracy.toStringAsFixed(1)} m. Necesitamos 5 m o menos; permanece aquí…',
+                'Ubicando la foto · precisión ${position.accuracy.toStringAsFixed(0)} m…',
           );
         }
       },
@@ -80,7 +81,7 @@ class _IdentifyScreenState extends State<IdentifyScreen> {
     setState(() {
       _busy = true;
       _error = null;
-      _stage = 'Afinando la ubicación de esta foto...';
+      _stage = 'Obteniendo la ubicación de esta foto…';
     });
     try {
       await _locatePhoto();
@@ -96,22 +97,11 @@ class _IdentifyScreenState extends State<IdentifyScreen> {
     setState(() {
       _busy = true;
       _error = null;
-      _stage = 'Validando ubicación y enviando…';
+      _stage = 'Enviando la observación…';
     });
     try {
       final repo = AppScope.read(context).community;
-      final boundary = await repo.campusBoundary();
       final point = LatLng(_location!.latitude, _location!.longitude);
-      if (boundary.length < 3) {
-        throw const FeatureUnavailable(
-          'El límite oficial del campus aún no está disponible. La observación no se ha enviado.',
-        );
-      }
-      if (!LocationService.inside(point, boundary)) {
-        throw const FeatureUnavailable(
-          'La fotografía fue tomada fuera del límite del campus. No se ha enviado.',
-        );
-      }
       if (mounted) {
         setState(
           () => _stage =
@@ -155,8 +145,7 @@ class _IdentifyScreenState extends State<IdentifyScreen> {
             eyebrow: 'Identifica una especie',
             title: 'Descubre qué',
             accent: 'estás viendo.',
-            description:
-                'Toma una fotografía de una planta o un animal dentro del campus. Necesitamos cámara y ubicación para registrar la observación.',
+            description: 'Toma una fotografía de una planta o un animal. Necesitamos cámara y ubicación para registrar la observación.',
           ),
           if (_photo != null)
             ClipRRect(

@@ -128,3 +128,19 @@ const campusReference = <LatLng>[
   LatLng(4.6272946, -74.065314),
   LatLng(4.6267944, -74.0654342),
 ];
+
+/// Sede al occidente de la Carrera 7 (calles 39 a 40): Vicerrectoría de
+/// Extensión, Edificio Javeriana y Javesalud. Trazada a partir de los edificios
+/// de OpenStreetMap (ODbL); es una referencia, no un límite oficial.
+const campusWestAnnex = <LatLng>[
+  LatLng(4.6279, -74.06546),
+  LatLng(4.62793, -74.06592),
+  LatLng(4.6272, -74.06595),
+  LatLng(4.62716, -74.06553),
+];
+
+/// Todas las áreas de la universidad que se dibujan como campus.
+const campusAreas = <List<LatLng>>[campusReference, campusWestAnnex];
+
+/// Todos los vértices de las áreas, para encuadrar el mapa.
+final campusAllPoints = [for (final area in campusAreas) ...area];

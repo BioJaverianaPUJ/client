@@ -47,6 +47,8 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
       final photos = await PhotoService().pick(
         camera: camera,
         limit: remaining,
+        // Cada foto se encuadra antes de agregarla a la publicación.
+        crop: PhotoCrop.post,
       );
       if (mounted) setState(() => _photos.addAll(photos));
     } catch (e) {

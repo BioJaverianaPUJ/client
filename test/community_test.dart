@@ -268,14 +268,12 @@ void main() {
   ) async {
     final repo = TestCommunity()..rejectSave = true;
     await setup(tester, const PostEditorScreen(), repo: repo);
-    await tester.scrollUntilVisible(
-      find.text('Publicar'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Publicar'));
+    // El botón inferior; el de la barra superior se habilita solo cuando
+    // la publicación está completa.
+    final publish = find.widgetWithText(FilledButton, 'Publicar');
+    await tester.ensureVisible(publish);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Publicar'));
+    await tester.tap(publish);
     await tester.pumpAndSettle();
     expect(repo.saves, 0);
     expect(find.text('Escribe un título para la publicación.'), findsOneWidget);
@@ -285,14 +283,18 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.enterText(find.byType(TextField).first, 'Mi descubrimiento');
-    await tester.scrollUntilVisible(
-      find.text('Publicar'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Publicar'));
+    await tester.tap(publish);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Publicar'));
+    // El backend exige descripción: sin ella tampoco se envía.
+    expect(repo.saves, 0);
+    expect(
+      find.text('Agrega una descripción a tu publicación.'),
+      findsOneWidget,
+    );
+    await tester.enterText(find.byType(TextField).at(1), 'Un colibrí');
+    await tester.ensureVisible(publish);
+    await tester.pumpAndSettle();
+    await tester.tap(publish);
     await tester.pumpAndSettle();
     expect(repo.saves, 1);
     expect(find.text('No se pudo publicar. Intenta de nuevo.'), findsOneWidget);

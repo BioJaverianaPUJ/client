@@ -26,8 +26,10 @@ class ApiClient {
   void Function()? onUnauthorized;
   void Function()? onDeactivated;
 
-  Future<Map<String, dynamic>> delete(String path) =>
-      _send('DELETE', path, authenticated: true);
+  Future<Map<String, dynamic>> delete(
+    String path, {
+    Map<String, dynamic>? body,
+  }) => _send('DELETE', path, body: body, authenticated: true);
 
   Future<void> uploadSignedPhoto(
     LocalPhoto photo,

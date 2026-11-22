@@ -4,8 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:maplibre_gl/maplibre_gl.dart' as ml;
 import '../config/campus_reference.dart';
 import '../config/map_config.dart';
+
+import 'package:geolocator/geolocator.dart';
+
+import '../services/location_service.dart';
+import '../widgets/community_widgets.dart';
 import '../theme/bio_theme.dart';
-import '../widgets/bio_scene.dart';
 import '../widgets/glass/liquid_glass.dart';
 
 /// Vista arquitectónica opcional del campus en 3D; el mapa operativo sigue
@@ -31,22 +35,70 @@ class _Campus3DScreenState extends State<Campus3DScreen> {
   double _bearing = _home.bearing;
   String? _name;
   String? _detail;
+  bool _showMe = false;
+  bool _locating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLocation();
+  }
+
+  /// Muestra el punto de la persona si ya dio permiso de ubicación.
+  Future<void> _checkLocation() async {
+    try {
+      final p = await Geolocator.checkPermission();
+      if (mounted &&
+          (p == LocationPermission.whileInUse ||
+              p == LocationPermission.always)) {
+        setState(() => _showMe = true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _goToMe() async {
+    if (_locating) return;
+    setState(() => _locating = true);
+    try {
+      final position = await LocationService.current();
+      if (!mounted) return;
+      setState(() => _showMe = true);
+      final current = _controller?.cameraPosition ?? _home;
+      await _controller?.animateCamera(
+        ml.CameraUpdate.newCameraPosition(
+          ml.CameraPosition(
+            target: ml.LatLng(position.latitude, position.longitude),
+            zoom: 17.6,
+            tilt: current.tilt,
+            bearing: current.bearing,
+          ),
+        ),
+        duration: const Duration(milliseconds: 700),
+      );
+    } catch (e) {
+      if (mounted) showMessage(context, messageFor(e));
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
 
   Future<String> _loadStyle() async {
     final buildings = jsonDecode(
       await rootBundle.loadString('assets/campus-buildings.geojson'),
     );
-    final ring = campusReference.map((p) => [p.longitude, p.latitude]).toList();
-    if (ring.first[0] != ring.last[0] || ring.first[1] != ring.last[1]) {
-      ring.add(ring.first);
-    }
+    final rings = [
+      for (final area in campusAreas)
+        [
+          [
+            for (final p in area) [p.longitude, p.latitude],
+            [area.first.longitude, area.first.latitude],
+          ],
+        ],
+    ];
     final campus = {
       'type': 'Feature',
       'properties': {},
-      'geometry': {
-        'type': 'Polygon',
-        'coordinates': [ring],
-      },
+      'geometry': {'type': 'MultiPolygon', 'coordinates': rings},
     };
     return jsonEncode({
       'version': 8,
@@ -288,6 +340,22 @@ class _Campus3DScreenState extends State<Campus3DScreen> {
                                 ),
                                 child: const Icon(Icons.remove, size: 20),
                               ),
+                              const SizedBox(height: 10),
+                              _MapControl(
+                                tooltip: 'Mi ubicación',
+                                onTap: _goToMe,
+                                child: _locating
+                                    ? const SizedBox.square(
+                                        dimension: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.my_location_rounded,
+                                        size: 20,
+                                      ),
+                              ),
                             ],
                           ),
                         ),
@@ -433,6 +501,8 @@ class _Campus3DScreenState extends State<Campus3DScreen> {
         initialCameraPosition: _home,
         trackCameraPosition: true,
         compassEnabled: false,
+        // Punto nativo de la ubicación de la persona.
+        myLocationEnabled: _showMe,
         minMaxZoomPreference: const ml.MinMaxZoomPreference(14, 20),
         onMapCreated: (controller) => _controller = controller,
         onCameraIdle: () {

@@ -1,6 +1,9 @@
 import 'dart:convert';
+
 import 'package:biojaveriana/models/map_cluster.dart';
+
 import 'dart:typed_data';
+
 import 'package:biojaveriana/config/campus_reference.dart';
 import 'package:biojaveriana/models/community.dart';
 import 'package:biojaveriana/models/experience.dart';
@@ -134,85 +137,88 @@ void main() {
         LocationService.inside(const LatLng(4.65, -74.08), campusReference),
         false,
       );
+      // La sede al occidente de la Carrera 7 también es campus.
+      const westOfSeventh = LatLng(4.62755, -74.0657);
+      expect(LocationService.inside(westOfSeventh, campusReference), false);
+      expect(LocationService.inside(westOfSeventh, campusWestAnnex), true);
+      expect(campusAreas.length, 2);
     },
   );
-  test(
-    'capture uploads once, creates a non-blocking job and handles server cooldown without retrying',
-    () async {
-      var recent = false;
-      final calls = <String>[];
-      final api = ApiClient(
-        httpClient: MockClient((r) async {
-          calls.add('${r.method} ${r.url.path}');
-          if (r.url.path.endsWith('/upload-presign')) {
-            return http.Response(
-              jsonEncode({
-                'url': 'https://storage.example.test/image',
-                'method': 'PUT',
-                'key': 'observations/u/photo',
-                'contentType': 'image/jpeg',
-              }),
-              200,
-            );
-          }
-          if (r.method == 'PUT') return http.Response('', 200);
-          if (r.method == 'POST' && recent) {
-            return http.Response('{"message":"Wait before retry"}', 429);
-          }
-          if (r.method == 'GET') {
-            return http.Response(
-              jsonEncode({
-                'content': recent
-                    ? [
-                        {'createdAt': DateTime.now().toUtc().toIso8601String()},
-                      ]
-                    : [],
-              }),
-              200,
-            );
-          }
-          expect(jsonDecode(r.body)['waitTimeoutSeconds'], 0);
-          expect(
-            jsonDecode(r.body)['referencePictureKey'],
-            'observations/u/photo',
-          );
+  test('capture uploads once, creates a non-blocking job and handles server cooldown without retrying', () async {
+    var recent = false;
+    final calls = <String>[];
+    final api = ApiClient(
+      httpClient: MockClient((r) async {
+        calls.add('${r.method} ${r.url.path}');
+        if (r.url.path.endsWith('/upload-presign')) {
           return http.Response(
             jsonEncode({
-              'status': 'PENDING',
-              'observation': observation('created', false),
+              'url': 'https://storage.example.test/image',
+              'method': 'PUT',
+              'key': 'observations/u/photo',
+              'contentType': 'image/jpeg',
             }),
             200,
           );
-        }),
-      );
-      final repo = ObservationRepository(api);
-      final photo = LocalPhoto(
-        Uint8List.fromList([1]),
-        'capture.jpg',
-        'image/jpeg',
-      );
-      final result = await repo.submit(
-        photo,
-        const LatLng(4.6286, -74.0637),
-        3,
-        DateTime.now(),
-      );
-      expect(result.status, Verification.processing);
-      expect(calls.length, 3);
-      recent = true;
-      await expectLater(
-        repo.submit(photo, const LatLng(4.6286, -74.0637), 3, DateTime.now()),
-        throwsException,
-      );
-      expect(calls.length, 6);
-      await expectLater(
-        repo.submit(photo, const LatLng(4.65, -74.08), 3, DateTime.now()),
-        throwsException,
-      );
-      expect(calls.length, 6);
-      api.close();
-    },
-  );
+        }
+        if (r.method == 'PUT') return http.Response('', 200);
+        if (r.method == 'POST' && recent) {
+          return http.Response('{"message":"Wait before retry"}', 429);
+        }
+        if (r.method == 'GET') {
+          return http.Response(
+            jsonEncode({
+              'content': recent
+                  ? [
+                      {'createdAt': DateTime.now().toUtc().toIso8601String()},
+                    ]
+                  : [],
+            }),
+            200,
+          );
+        }
+        expect(jsonDecode(r.body)['waitTimeoutSeconds'], 0);
+        expect(
+          jsonDecode(r.body)['referencePictureKey'],
+          'observations/u/photo',
+        );
+        return http.Response(
+          jsonEncode({
+            'status': 'PENDING',
+            'observation': observation('created', false),
+          }),
+          200,
+        );
+      }),
+    );
+    final repo = ObservationRepository(api);
+    final photo = LocalPhoto(
+      Uint8List.fromList([1]),
+      'capture.jpg',
+      'image/jpeg',
+    );
+    final result = await repo.submit(
+      photo,
+      const LatLng(4.6286, -74.0637),
+      3,
+      DateTime.now(),
+    );
+    expect(result.status, Verification.processing);
+    expect(calls.length, 3);
+    recent = true;
+    await expectLater(
+      repo.submit(photo, const LatLng(4.6286, -74.0637), 3, DateTime.now()),
+      throwsException,
+    );
+    expect(calls.length, 6);
+    // Fuera del campus ya no se bloquea en la app: llega al servidor.
+    await expectLater(
+      repo.submit(photo, const LatLng(4.65, -74.08), 3, DateTime.now()),
+      throwsException,
+    );
+    expect(calls.length, 9);
+    api.close();
+  });
   test('map clusters preserve specimens and separate distant coordinates', () {
     final rows = [
       {'latitude': 4.628, 'longitude': -74.064},

@@ -54,22 +54,16 @@ class ApiAccountRepository extends AccountRepository {
     required String email,
     required String password,
   }) async {
-    // RF-41 exige confirmar con la contraseña actual. DELETE /users/me no la
-    // recibe, así que se comprueba antes iniciando sesión con ella.
+    // RF-41: el backend confirma la contraseña actual en el mismo DELETE.
     try {
-      await _api.post(
-        '/auth/login',
-        body: {'email': email, 'password': password},
-        authenticated: false,
-      );
+      await _api.delete('/users/me', body: {'password': password});
     } on ApiException catch (e) {
-      if (e.kind == ApiErrorKind.invalidCredentials || e.statusCode == 401) {
+      if (e.code == 'INVALID_CURRENT_PASSWORD') {
         throw const FeatureUnavailable(
           'La contraseña no es correcta. Tu cuenta no se eliminó.',
         );
       }
       rethrow;
     }
-    await _api.delete('/users/me');
   }
 }

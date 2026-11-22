@@ -36,14 +36,10 @@ class LocationService {
     );
   }
 
+  /// Mejor ubicación disponible para una observación. No bloquea por
+  /// precisión ni por estar fuera del campus: toma la mejor lectura.
   static Future<Position> precise({void Function(Position)? onProgress}) async {
     await ensurePermission();
-    if (await Geolocator.getLocationAccuracy() ==
-        LocationAccuracyStatus.reduced) {
-      throw const FeatureUnavailable(
-        'Activa Ubicación precisa en los permisos de BioJaveriana. La ubicación aproximada no permite registrar una observación.',
-      );
-    }
     return waitForPrecisePosition(
       Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
@@ -55,24 +51,34 @@ class LocationService {
     );
   }
 
+  /// Lectura que se acepta de inmediato (metros).
+  static const goodAccuracy = 20.0;
+
+  /// Espera una lectura buena; si el GPS no la alcanza, usa la mejor lectura
+  /// recibida tras [settle]. Solo falla si no llega ninguna lectura válida.
   static Future<Position> waitForPrecisePosition(
     Stream<Position> positions, {
-    Duration timeout = const Duration(seconds: 40),
+    Duration timeout = const Duration(seconds: 30),
+    Duration settle = const Duration(seconds: 6),
     DateTime Function()? now,
     void Function(Position)? onProgress,
   }) async {
     final clock = now ?? DateTime.now;
     final result = Completer<Position>();
-    double? best;
+    Position? best;
+    Timer? settleTimer;
+    void finishWithBest() {
+      if (!result.isCompleted && best != null) result.complete(best!);
+    }
+
     final timer = Timer(timeout, () {
-      if (!result.isCompleted) {
-        result.completeError(
-          FeatureUnavailable(
-            'No se alcanzó la precisión de 5 m${best == null ? '' : ' (mejor lectura: ${best!.toStringAsFixed(1)} m)'}. '
-            'La foto se conserva. Activa Ubicación precisa y reintenta desde el mismo lugar; si te desplazas, toma otra foto.',
-          ),
-        );
-      }
+      if (result.isCompleted) return;
+      if (best != null) return finishWithBest();
+      result.completeError(
+        const FeatureUnavailable(
+          'No pudimos obtener tu ubicación. Revisa que el GPS esté activo y reintenta.',
+        ),
+      );
     });
     final subscription = positions.listen(
       (position) {
@@ -88,27 +94,36 @@ class LocationService {
             age.isNegative) {
           return;
         }
-        if (best == null || position.accuracy < best!) best = position.accuracy;
+        if (best == null || position.accuracy < best!.accuracy) {
+          best = position;
+        }
         onProgress?.call(position);
-        if (position.accuracy <= 5) result.complete(position);
+        if (position.accuracy <= goodAccuracy) {
+          result.complete(position);
+        } else {
+          settleTimer ??= Timer(settle, finishWithBest);
+        }
       },
       onError: (Object error, StackTrace stack) {
-        if (!result.isCompleted) result.completeError(error, stack);
+        if (result.isCompleted) return;
+        if (best != null) return finishWithBest();
+        result.completeError(error, stack);
       },
       onDone: () {
-        if (!result.isCompleted) {
-          result.completeError(
-            const FeatureUnavailable(
-              'Se interrumpió la ubicación. Reintenta sin moverte del lugar de la fotografía.',
-            ),
-          );
-        }
+        if (result.isCompleted) return;
+        if (best != null) return finishWithBest();
+        result.completeError(
+          const FeatureUnavailable(
+            'Se interrumpió la ubicación. Reintenta en unos segundos.',
+          ),
+        );
       },
     );
     try {
       return await result.future;
     } finally {
       timer.cancel();
+      settleTimer?.cancel();
       await subscription.cancel();
     }
   }

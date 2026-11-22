@@ -64,14 +64,14 @@ class _CampusVisitTrackerState extends State<CampusVisitTracker>
           timeLimit: Duration(seconds: 15),
         ),
       );
-      if (!mounted || generation != _generation || position.accuracy > 5) {
+      if (!mounted || generation != _generation || position.accuracy > 30) {
         return;
       }
       final point = LatLng(position.latitude, position.longitude);
       final repo = widget.session.community;
       // The server checks exact radii and polygons and deduplicates visits.
-      // Keep location reporting limited to the campus reference area.
-      if (LocationService.inside(point, campusReference)) {
+      // La ubicación solo se reporta dentro de las áreas de la universidad.
+      if (campusAreas.any((area) => LocationService.inside(point, area))) {
         await repo.visit(point, position.accuracy);
       }
     } catch (_) {

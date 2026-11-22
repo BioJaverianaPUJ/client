@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'reports_screen.dart';
 import 'account_screen.dart';
 import 'post_detail_screen.dart';
@@ -29,7 +30,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _busy = false;
 
   ProgressSummary? _progress;
-  Object? _progressError;
   bool _progressLoading = true;
 
   final List<CommunityPost> _posts = [];
@@ -77,17 +77,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadProgress() async {
     final id = _userId;
     if (id == null) return;
-    setState(() {
-      _progressLoading = true;
-      _progressError = null;
-    });
+    setState(() => _progressLoading = true);
     try {
-      final progress = await AppScope.read(
-        context,
-      ).community.progress(userId: id);
+      final progress = await AppScope.read(context).community
+          .progress(userId: id);
       if (mounted) setState(() => _progress = progress);
-    } catch (e) {
-      if (mounted) setState(() => _progressError = e);
+    } catch (_) {
+      // Sin experiencia disponible el perfil se muestra igual.
     } finally {
       if (mounted) setState(() => _progressLoading = false);
     }
@@ -101,9 +97,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _postsError = null;
     });
     try {
-      final page = await AppScope.read(
-        context,
-      ).community.feed(authorId: id, cursor: reset ? null : _cursor);
+      final page = await AppScope.read(context).community
+          .feed(authorId: id, cursor: reset ? null : _cursor);
       if (!mounted) return;
       setState(() {
         if (reset) _posts.clear();
@@ -136,7 +131,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (remove) {
         updated = await users.removeMedia(type);
       } else {
-        final photos = await PhotoService().pick(camera: false);
+        // Recorte nativo: cuadrado para la foto y panorámico para el banner.
+        final photos = await PhotoService().pick(
+          camera: false,
+          crop: type == 'banner' ? PhotoCrop.banner : PhotoCrop.avatar,
+        );
         if (photos.isEmpty) return;
         updated = await users.upload(photos.single, type);
       }
@@ -368,10 +367,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 2),
               Text(
                 '@${user.username}',
-                style: const TextStyle(
-                  color: BioTheme.textMuted,
-                  fontSize: 14,
-                ),
+                style: const TextStyle(color: BioTheme.textMuted, fontSize: 14),
               ),
               if (_own) ...[
                 const SizedBox(height: 14),
@@ -437,7 +433,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 label: 'Nivel',
               ),
               const _StatDivider(),
-              _Stat(value: progress == null ? '—' : '${progress.xp}', label: 'XP'),
+              _Stat(
+                value: progress == null ? '—' : '${progress.xp}',
+                label: 'XP',
+              ),
             ],
           ),
           if (_own) ...[
@@ -555,15 +554,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         const Icon(Icons.grid_on_rounded, color: BioTheme.lime, size: 20),
         const SizedBox(width: 8),
-        const Text(
-          'Publicaciones',
-          style: TextStyle(
-            color: BioTheme.textPrimary,
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
+        const Expanded(
+          child: Text(
+            'Publicaciones',
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: BioTheme.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+            ),
           ),
         ),
-        const Spacer(),
         if (_own)
           TextButton.icon(
             onPressed: _compose,
@@ -707,12 +708,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 sliver: SliverGrid(
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 4,
-                        crossAxisSpacing: 4,
-                      ),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 4,
+                    crossAxisSpacing: 4,
+                  ),
                   delegate: SliverChildBuilderDelegate(
                     (_, i) => _PostTile(
                       post: _posts[i],

@@ -1,13 +1,17 @@
 import '../theme/bio_theme.dart';
 import 'campus_3d_screen.dart';
+
 import 'dart:async';
+
 import '../config/campus_reference.dart';
 import '../config/map_config.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../models/community.dart';
 import '../models/map_cluster.dart';
 import '../services/location_service.dart';
@@ -37,7 +41,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   LatLng? _position;
   bool _plants = true, _showAnimals = true, _green = true, _interest = true;
   bool _loading = true, _locating = false, _more = false, _onlineLayers = false;
-  int _page = 0;
   double _zoom = 16;
   bool _tileFailed = false;
   Object? _error, _animalsError;
@@ -46,7 +49,24 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _load();
+      _autoLocate();
+    });
+  }
+
+  /// Muestra el punto de la persona si ya concedió el permiso, sin pedirlo
+  /// de nuevo ni mover el mapa.
+  Future<void> _autoLocate() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        await _locate(center: false);
+      }
+    } catch (_) {
+      // Sin servicio de ubicación el mapa funciona igual.
+    }
   }
 
   @override
@@ -68,7 +88,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void _scheduleLocation() {
     _timer?.cancel();
     _timer = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(seconds: 10),
       (_) => _locate(center: false),
     );
   }
@@ -94,7 +114,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         _specimens
           ..clear()
           ..addAll(all);
-        _page = 0;
         _more = false;
       });
     } catch (e) {
@@ -192,9 +211,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _detail(Map<String, dynamic> specimen) async {
     try {
-      final species = await AppScope.read(
-        context,
-      ).catalog.species(specimen['speciesId'] as String);
+      final species = await AppScope.read(context).catalog
+          .species(specimen['speciesId'] as String);
       if (mounted) {
         showSpecies(
           context,
@@ -330,53 +348,54 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Widget _groupChips() {
     final groups = _groupsPresent;
     if (groups.length < 2) return const SizedBox.shrink();
-    Widget chip(String label, int n, bool selected, VoidCallback onTap,
-        [SpeciesGroup? g]) =>
-        Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: Material(
+    Widget chip(
+      String label,
+      int n,
+      bool selected,
+      VoidCallback onTap, [
+      SpeciesGroup? g,
+    ]) => Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: selected
+            ? BioTheme.lime
+            : BioTheme.backgroundDeep.withValues(alpha: .7),
+        shape: StadiumBorder(
+          side: BorderSide(
             color: selected
                 ? BioTheme.lime
-                : BioTheme.backgroundDeep.withValues(alpha: .7),
-            shape: StadiumBorder(
-              side: BorderSide(
-                color: selected
-                    ? BioTheme.lime
-                    : Colors.white.withValues(alpha: .14),
-              ),
-            ),
-            child: InkWell(
-              customBorder: const StadiumBorder(),
-              onTap: onTap,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    if (g != null) ...[
-                      Icon(
-                        g.icon,
-                        size: 16,
-                        color: selected ? BioTheme.iconDark : g.color,
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    Text(
-                      '$label  $n',
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight:
-                            selected ? FontWeight.w800 : FontWeight.w600,
-                        color: selected
-                            ? BioTheme.iconDark
-                            : BioTheme.textPrimary,
-                      ),
-                    ),
-                  ],
+                : Colors.white.withValues(alpha: .14),
+          ),
+        ),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                if (g != null) ...[
+                  Icon(
+                    g.icon,
+                    size: 16,
+                    color: selected ? BioTheme.iconDark : g.color,
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  '$label  $n',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected ? BioTheme.iconDark : BioTheme.textPrimary,
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-        );
+        ),
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: SizedBox(
@@ -440,7 +459,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.info_outline_rounded, size: 16, color: BioTheme.lime),
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 16,
+                  color: BioTheme.lime,
+                ),
                 SizedBox(width: 6),
                 Text(
                   'Leyenda',
@@ -467,7 +490,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             onTap: () => _map.fitCamera(
               CameraFit.bounds(
                 bounds: LatLngBounds.fromPoints(
-                  _boundary.length >= 3 ? _boundary : campusReference,
+                  _boundary.length >= 3 ? _boundary : campusAllPoints,
                 ),
                 padding: const EdgeInsets.all(24),
               ),
@@ -531,208 +554,214 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 children: [
                   Positioned.fill(
                     child: FlutterMap(
-                  mapController: _map,
-                  options: MapOptions(
-                    initialCenter:
-                        widget.focusZone?.points.firstOrNull ??
-                        const LatLng(4.6282, -74.0644),
-                    initialZoom: 17,
-                    initialCameraFit: widget.focusZone == null
-                        ? CameraFit.bounds(
-                            bounds: LatLngBounds.fromPoints(campusReference),
-                            padding: const EdgeInsets.all(24),
-                          )
-                        : null,
-                    onPositionChanged: (camera, _) {
-                      if (_zoom.floor() != camera.zoom.floor()) {
-                        setState(() => _zoom = camera.zoom);
-                      }
-                    },
-                    minZoom: 14,
-                    maxZoom: 19,
-                  ),
-                  children: [
-                    ColorFiltered(
-                      colorFilter: MapConfig.usesCarto
-                          ? const ColorFilter.mode(
-                              Colors.transparent,
-                              BlendMode.srcOver,
-                            )
-                          : const ColorFilter.matrix([
-                              .50,
-                              .40,
-                              .10,
-                              0,
-                              12,
-                              .20,
-                              .70,
-                              .10,
-                              0,
-                              12,
-                              .20,
-                              .40,
-                              .40,
-                              0,
-                              12,
-                              0,
-                              0,
-                              0,
-                              1,
-                              0,
-                            ]),
-                      child: TileLayer(
-                        urlTemplate: MapConfig.tileUrl,
-                        userAgentPackageName: 'co.edu.javeriana.biojaveriana',
-                        errorTileCallback: (_, _, _) {
-                          if (mounted && !_tileFailed) {
-                            setState(() => _tileFailed = true);
+                      mapController: _map,
+                      options: MapOptions(
+                        initialCenter:
+                            widget.focusZone?.points.firstOrNull ??
+                            const LatLng(4.6282, -74.0644),
+                        initialZoom: 17,
+                        initialCameraFit: widget.focusZone == null
+                            ? CameraFit.bounds(
+                                bounds: LatLngBounds.fromPoints(
+                                  campusAllPoints,
+                                ),
+                                padding: const EdgeInsets.all(24),
+                              )
+                            : null,
+                        onPositionChanged: (camera, _) {
+                          if (_zoom.floor() != camera.zoom.floor()) {
+                            setState(() => _zoom = camera.zoom);
                           }
                         },
+                        minZoom: 14,
+                        maxZoom: 19,
                       ),
-                    ),
-                    PolygonLayer(
-                      polygons: [
-                        Polygon(
-                          points: const [
-                            LatLng(5, -75),
-                            LatLng(5, -73),
-                            LatLng(4, -73),
-                            LatLng(4, -75),
-                          ],
-                          holePointsList: [
-                            _boundary.length >= 3 ? _boundary : campusReference,
-                          ],
-                          color: const Color(0x77002E28),
-                          borderStrokeWidth: 0,
+                      children: [
+                        ColorFiltered(
+                          colorFilter: MapConfig.usesCarto
+                              ? const ColorFilter.mode(
+                                  Colors.transparent,
+                                  BlendMode.srcOver,
+                                )
+                              : const ColorFilter.matrix([
+                                  .50,
+                                  .40,
+                                  .10,
+                                  0,
+                                  12,
+                                  .20,
+                                  .70,
+                                  .10,
+                                  0,
+                                  12,
+                                  .20,
+                                  .40,
+                                  .40,
+                                  0,
+                                  12,
+                                  0,
+                                  0,
+                                  0,
+                                  1,
+                                  0,
+                                ]),
+                          child: TileLayer(
+                            urlTemplate: MapConfig.tileUrl,
+                            userAgentPackageName:
+                                'co.edu.javeriana.biojaveriana',
+                            errorTileCallback: (_, _, _) {
+                              if (mounted && !_tileFailed) {
+                                setState(() => _tileFailed = true);
+                              }
+                            },
+                          ),
                         ),
-                        if (_boundary.length < 3)
-                          Polygon(
-                            points: campusReference,
-                            color: const Color(0x11284D37),
-                            borderColor: const Color(0xFF285D46),
-                            borderStrokeWidth: 3,
-                          ),
-                        if (_boundary.length >= 3)
-                          Polygon(
-                            points: _boundary,
-                            color: Colors.transparent,
-                            borderColor: Colors.amber,
-                            borderStrokeWidth: 3,
-                          ),
-                        for (final zone in zones.where(
-                          (z) => z.interest ? _interest : _green,
-                        ))
-                          Polygon(
-                            points: zone.points,
-                            color:
-                                (zone.interest ? Colors.purple : Colors.green)
-                                    .withValues(alpha: .22),
-                            borderColor: zone.interest
-                                ? Colors.purple
-                                : Colors.green,
-                            borderStrokeWidth: 2,
-                            label: zone.name,
-                          ),
-                      ],
-                    ),
-                    MarkerLayer(
-                      markers: [
-                        if (_plants)
-                          for (final cluster in clusterSpecimens(
-                            _visibleSpecimens,
-                            _zoom,
-                          ))
-                            cluster.items.length == 1
-                                ? Marker(
-                                    point: cluster.center,
-                                    width: 44,
-                                    height: 44,
-                                    child: Semantics(
-                                      button: true,
-                                      label:
-                                          'Espécimen: ${_groupOf(cluster.items.single).label}',
-                                      child: GestureDetector(
-                                        onTap: () =>
-                                            _detail(cluster.items.single),
-                                        child: Center(
-                                          child: _SpecimenPin(
-                                            group: _groupOf(
-                                              cluster.items.single,
+                        PolygonLayer(
+                          polygons: [
+                            Polygon(
+                              points: const [
+                                LatLng(5, -75),
+                                LatLng(5, -73),
+                                LatLng(4, -73),
+                                LatLng(4, -75),
+                              ],
+                              holePointsList: _boundary.length >= 3
+                                  ? [_boundary]
+                                  : campusAreas,
+                              color: const Color(0x77002E28),
+                              borderStrokeWidth: 0,
+                            ),
+                            if (_boundary.length < 3)
+                              for (final area in campusAreas)
+                                Polygon(
+                                  points: area,
+                                  color: const Color(0x11284D37),
+                                  borderColor: const Color(0xFF285D46),
+                                  borderStrokeWidth: 3,
+                                ),
+                            if (_boundary.length >= 3)
+                              Polygon(
+                                points: _boundary,
+                                color: Colors.transparent,
+                                borderColor: Colors.amber,
+                                borderStrokeWidth: 3,
+                              ),
+                            for (final zone in zones.where(
+                              (z) => z.interest ? _interest : _green,
+                            ))
+                              Polygon(
+                                points: zone.points,
+                                color:
+                                    (zone.interest
+                                            ? Colors.purple
+                                            : Colors.green)
+                                        .withValues(alpha: .22),
+                                borderColor: zone.interest
+                                    ? Colors.purple
+                                    : Colors.green,
+                                borderStrokeWidth: 2,
+                                label: zone.name,
+                              ),
+                          ],
+                        ),
+                        MarkerLayer(
+                          markers: [
+                            if (_plants)
+                              for (final cluster in clusterSpecimens(
+                                _visibleSpecimens,
+                                _zoom,
+                              ))
+                                cluster.items.length == 1
+                                    ? Marker(
+                                        point: cluster.center,
+                                        width: 44,
+                                        height: 44,
+                                        child: Semantics(
+                                          button: true,
+                                          label:
+                                              'Espécimen: ${_groupOf(cluster.items.single).label}',
+                                          child: GestureDetector(
+                                            onTap: () =>
+                                                _detail(cluster.items.single),
+                                            child: Center(
+                                              child: _SpecimenPin(
+                                                group: _groupOf(
+                                                  cluster.items.single,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : Marker(
+                                        point: cluster.center,
+                                        width: 52,
+                                        height: 52,
+                                        child: Semantics(
+                                          button: true,
+                                          label:
+                                              '${cluster.items.length} especímenes cercanos',
+                                          child: GestureDetector(
+                                            onTap: () => _openCluster(cluster),
+                                            child: Center(
+                                              child: _ClusterPin(
+                                                count: cluster.items.length,
+                                                color: _dominantColor(
+                                                  cluster.items,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  )
-                                : Marker(
-                                    point: cluster.center,
-                                    width: 52,
-                                    height: 52,
-                                    child: Semantics(
-                                      button: true,
-                                      label:
-                                          '${cluster.items.length} especímenes cercanos',
-                                      child: GestureDetector(
-                                        onTap: () => _openCluster(cluster),
-                                        child: Center(
-                                          child: _ClusterPin(
-                                            count: cluster.items.length,
-                                            color: _dominantColor(
-                                              cluster.items,
-                                            ),
-                                          ),
-                                        ),
+                            if (_showAnimals)
+                              for (final animal in _animals)
+                                Marker(
+                                  point: animal.point,
+                                  width: 44,
+                                  height: 44,
+                                  child: Semantics(
+                                    button: true,
+                                    label: 'Observación: ${animal.species}',
+                                    child: GestureDetector(
+                                      onTap: () => showMessage(
+                                        context,
+                                        '${animal.species} · ${animal.status.label} · ${dateLabel(animal.date)}',
                                       ),
+                                      child: const Center(child: _AnimalPin()),
                                     ),
                                   ),
-                        if (_showAnimals)
-                          for (final animal in _animals)
-                            Marker(
-                              point: animal.point,
-                              width: 44,
-                              height: 44,
-                              child: Semantics(
-                                button: true,
-                                label: 'Observación: ${animal.species}',
-                                child: GestureDetector(
-                                  onTap: () => showMessage(
-                                    context,
-                                    '${animal.species} · ${animal.status.label} · ${dateLabel(animal.date)}',
-                                  ),
-                                  child: const Center(child: _AnimalPin()),
+                                ),
+                            if (_position != null)
+                              Marker(
+                                point: _position!,
+                                width: 40,
+                                height: 40,
+                                child: const Center(child: _UserDot()),
+                              ),
+                          ],
+                        ),
+                        RichAttributionWidget(
+                          attributions: [
+                            if (MapConfig.usesCarto)
+                              TextSourceAttribution(
+                                'CARTO',
+                                onTap: () => launchUrl(
+                                  Uri.parse('https://carto.com/attributions'),
+                                ),
+                              ),
+                            TextSourceAttribution(
+                              'OpenStreetMap contributors',
+                              onTap: () => launchUrl(
+                                Uri.parse(
+                                  'https://www.openstreetmap.org/copyright',
                                 ),
                               ),
                             ),
-                        if (_position != null)
-                          Marker(
-                            point: _position!,
-                            width: 40,
-                            height: 40,
-                            child: const Center(child: _UserDot()),
-                          ),
-                      ],
-                    ),
-                    RichAttributionWidget(
-                      attributions: [
-                        if (MapConfig.usesCarto)
-                          TextSourceAttribution(
-                            'CARTO',
-                            onTap: () => launchUrl(
-                              Uri.parse('https://carto.com/attributions'),
-                            ),
-                          ),
-                        TextSourceAttribution(
-                          'OpenStreetMap contributors',
-                          onTap: () => launchUrl(
-                            Uri.parse(
-                              'https://www.openstreetmap.org/copyright',
-                            ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
                   ),
                   ..._mapOverlays(),
                 ],
@@ -743,8 +772,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           if (_tileFailed)
             const _InlineNotice(
               icon: Icons.wifi_off_rounded,
-              message:
-                  'No pudimos cargar las imágenes del mapa. Revisa tu conexión y pulsa actualizar.',
+              message: 'No pudimos cargar las imágenes del mapa. Revisa tu conexión y pulsa actualizar.',
             ),
           if (_animalsError != null)
             _InlineNotice(
@@ -772,7 +800,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           ),
           BioGlassAction(
             title: 'Explorar campus en 3D',
-            subtitle: 'Recorre los edificios en volumen, gira e inclina la vista.',
+            subtitle:
+                'Recorre los edificios en volumen, gira e inclina la vista.',
             icon: Icons.view_in_ar_outlined,
             onTap: () => Navigator.push(
               context,
@@ -784,9 +813,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           BioGlassCard(
             margin: EdgeInsets.zero,
             child: Theme(
-              data: Theme.of(
-                context,
-              ).copyWith(dividerColor: Colors.transparent),
+              data: Theme.of(context)
+                  .copyWith(dividerColor: Colors.transparent),
               child: ExpansionTile(
                 tilePadding: const EdgeInsets.fromLTRB(20, 6, 16, 6),
                 childrenPadding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
@@ -1043,14 +1071,15 @@ class _SpecimenPin extends StatelessWidget {
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [
-          Color.lerp(group.color, Colors.white, .25)!,
-          group.color,
-        ],
+        colors: [Color.lerp(group.color, Colors.white, .25)!, group.color],
       ),
       border: Border.all(color: Colors.white, width: 2),
       boxShadow: const [
-        BoxShadow(color: Color(0x66000000), blurRadius: 6, offset: Offset(0, 2)),
+        BoxShadow(
+          color: Color(0x66000000),
+          blurRadius: 6,
+          offset: Offset(0, 2),
+        ),
       ],
     ),
     child: Icon(group.icon, size: size * .55, color: BioTheme.backgroundDeep),
@@ -1072,7 +1101,11 @@ class _ClusterPin extends StatelessWidget {
       shape: BoxShape.circle,
       color: color.withValues(alpha: .35),
       boxShadow: const [
-        BoxShadow(color: Color(0x55000000), blurRadius: 8, offset: Offset(0, 2)),
+        BoxShadow(
+          color: Color(0x55000000),
+          blurRadius: 8,
+          offset: Offset(0, 2),
+        ),
       ],
     ),
     child: Container(
@@ -1106,7 +1139,11 @@ class _AnimalPin extends StatelessWidget {
       color: const Color(0xFFF4A259),
       border: Border.all(color: Colors.white, width: 2),
       boxShadow: const [
-        BoxShadow(color: Color(0x66000000), blurRadius: 6, offset: Offset(0, 2)),
+        BoxShadow(
+          color: Color(0x66000000),
+          blurRadius: 6,
+          offset: Offset(0, 2),
+        ),
       ],
     ),
     child: Icon(Icons.pets_rounded, size: size * .5, color: Colors.white),
@@ -1148,9 +1185,7 @@ class _LegendRow extends StatelessWidget {
       children: [
         SizedBox(width: 40, child: Center(child: marker)),
         const SizedBox(width: 12),
-        Expanded(
-          child: Text(label, style: const TextStyle(fontSize: 14)),
-        ),
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 14))),
         if (detail != null)
           Text(
             detail!,

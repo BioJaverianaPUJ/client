@@ -1,8 +1,6 @@
 import 'package:latlong2/latlong.dart';
 import '../models/community.dart';
 import 'api_client.dart';
-import '../config/campus_reference.dart';
-import 'location_service.dart';
 import 'community_repository.dart';
 
 /// Observations have an independent contract from the social feed.
@@ -93,9 +91,10 @@ class ObservationRepository extends CommunityRepository {
     );
   }
 
-  // A published server boundary must replace this reference when RF-57 is exposed.
+  // El backend aún no publica un límite (RF-57); vacío hace que los mapas
+  // usen las áreas locales del campus (campusAreas).
   @override
-  Future<List<LatLng>> campusBoundary() async => campusReference;
+  Future<List<LatLng>> campusBoundary() async => const <LatLng>[];
 
   @override
   Future<void> requestReview(String id) async {
@@ -109,13 +108,11 @@ class ObservationRepository extends CommunityRepository {
     double accuracy,
     DateTime capturedAt,
   ) async {
-    final boundary = await campusBoundary();
-    if (!accuracy.isFinite ||
-        accuracy > 5 ||
-        accuracy < 0 ||
-        !LocationService.inside(point, boundary)) {
+    // La observación se registra donde se tomó, dentro o fuera del campus y
+    // con la precisión que el GPS haya logrado.
+    if (!point.latitude.isFinite || !point.longitude.isFinite) {
       throw const FeatureUnavailable(
-        'La captura debe estar dentro del campus y tener una ubicación precisa.',
+        'No pudimos leer la ubicación de la foto. Reintenta.',
       );
     }
     final signed = await api.post(

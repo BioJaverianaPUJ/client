@@ -27,10 +27,35 @@ class SocialRepository extends ObservationRepository {
         }
       }
       final status = await api.get('/gamification/me');
-      final achievements = await api.get('/achievements/me');
+      final achievements = await _all('/achievements/me');
       final xp = (status['totalXp'] as num).toInt();
       final lower = (status['xpForCurrentLevel'] as num).toInt();
       final upper = (status['xpForNextLevel'] as num).toInt();
+      // Misiones (RF-49) y dato curioso del día (RF-51): si el servidor no
+      // los tiene, el resto de la experiencia se muestra igual.
+      var missions = <Mission>[];
+      var missionsAvailable = true;
+      try {
+        final board = await api.get('/missions/me');
+        missions = [
+          for (final (key, label) in const [
+            ('daily', 'Diarias'),
+            ('weekly', 'Semanales'),
+            ('event', 'De evento'),
+          ])
+            for (final raw in (board[key] as List?) ?? const [])
+              if ((raw as Map<String, dynamic>)['status'] != 'EXPIRED')
+                decodeMission(raw, period: label),
+        ];
+      } catch (_) {
+        missionsAvailable = false;
+      }
+      Curiosity? curiosity;
+      try {
+        final motd = await api.get('/motd/today');
+        final fact = motd['funFact'];
+        if (fact is Map<String, dynamic>) curiosity = decodeCuriosity(fact);
+      } catch (_) {}
       return ProgressSummary(
         xp: xp,
         level: (status['level'] as num).toInt(),
@@ -38,20 +63,12 @@ class SocialRepository extends ObservationRepository {
         levelProgress: upper > lower
             ? ((xp - lower) / (upper - lower)).clamp(0.0, 1.0)
             : 1,
-        missionsAvailable: false,
-        achievements: (achievements['content'] as List).map((raw) {
-          final a = raw as Map<String, dynamic>;
-          return Mission(
-            id: a['id'] as String,
-            title: a['name'] as String,
-            description: a['description'] as String? ?? '',
-            period: 'Logros',
-            progress: (a['progress'] as num?)?.toInt() ?? 0,
-            target: (a['target'] as num?)?.toInt() ?? 0,
-            xp: (a['xpReward'] as num).toInt(),
-            completedByServer: a['completed'] == true,
-          );
-        }).toList(),
+        missions: missions,
+        missionsAvailable: missionsAvailable,
+        curiosity: curiosity,
+        achievements: [
+          for (final a in achievements) decodeMission(a, period: 'Logros'),
+        ],
       );
     } on ApiException catch (e) {
       if (e.statusCode == 404 || e.statusCode == 501) {
@@ -81,7 +98,77 @@ class SocialRepository extends ObservationRepository {
           date: DateTime.parse(row['createdAt'] as String),
         );
       }).toList(),
-      hasMore: page + 1 < (result['totalPages'] as num),
+      // Spring envía el total dentro de "pagination".
+      hasMore:
+          page + 1 <
+          (((result['pagination'] as Map?)?['totalPages'] ??
+                  result['totalPages'] ??
+                  0)
+              as num),
+    );
+  }
+
+  /// Progreso del backend (PredicateProgress): condición simple con
+  /// current/target, o nodos Y/O con metChildren/totalChildren.
+  static (int, int) progressOf(Object? p) {
+    if (p is! Map) return (0, 0);
+    if (p['target'] is num) {
+      return (
+        (p['current'] as num?)?.toInt() ?? 0,
+        (p['target'] as num).toInt(),
+      );
+    }
+    if (p['totalChildren'] is num) {
+      return (
+        (p['metChildren'] as num?)?.toInt() ?? 0,
+        (p['totalChildren'] as num).toInt(),
+      );
+    }
+    return (p['satisfied'] == true ? 1 : 0, 1);
+  }
+
+  static Mission decodeMission(
+    Map<String, dynamic> row, {
+    required String period,
+  }) {
+    final (progress, target) = progressOf(row['progress']);
+    final end = row['periodEnd'];
+    return Mission(
+      id: row['id'] as String,
+      title: row['name'] as String? ?? 'Reto',
+      description: row['description'] as String? ?? '',
+      period: period,
+      progress: progress,
+      target: target,
+      xp: (row['xpReward'] as num?)?.toInt() ?? 0,
+      endsAt: end is String ? DateTime.tryParse(end) : null,
+      completedByServer:
+          row['completed'] == true || row['status'] == 'COMPLETED',
+    );
+  }
+
+  static Curiosity decodeCuriosity(Map<String, dynamic> row) {
+    CampusZone? zone;
+    final poi = row['poi'];
+    if (poi is Map<String, dynamic>) {
+      try {
+        zone = decodeZone(poi);
+      } catch (_) {}
+    }
+    final images = [...((row['images'] as List?) ?? const [])]
+      ..sort(
+        (a, b) => ((a as Map)['orderIndex'] as num? ?? 0).compareTo(
+          (b as Map)['orderIndex'] as num? ?? 0,
+        ),
+      );
+    return Curiosity(
+      row['title'] as String? ?? 'Dato curioso',
+      row['description'] as String? ?? '',
+      images: [
+        for (final i in images)
+          if ((i as Map)['url'] is String) i['url'] as String,
+      ],
+      zone: zone,
     );
   }
 
@@ -461,7 +548,7 @@ class SocialRepository extends ObservationRepository {
       .toList();
   @override
   Future<void> visit(LatLng point, double accuracy) async {
-    if (!accuracy.isFinite || accuracy > 5 || accuracy < 0) return;
+    if (!accuracy.isFinite || accuracy > 30 || accuracy < 0) return;
     await api.post(
       '/pois/telemetry',
       body: {'latitude': point.latitude, 'longitude': point.longitude},
