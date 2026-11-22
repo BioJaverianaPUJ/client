@@ -36,6 +36,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   String? _groupFilter;
   List<LatLng> _boundary = [];
   List<CampusZone> _zones = [];
+  // Zonas de interés con una misión activa de la persona.
+  Set<String> _missionZones = const {};
   List<Sighting> _animals = [];
   Set<String> _verifiedSpecimens = {};
   LatLng? _position;
@@ -167,10 +169,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       try {
         final boundary = await session.community.campusBoundary();
         final zones = await session.community.zones();
+        final missionZones = await session.community.missionZoneIds();
         if (mounted) {
           setState(() {
             _boundary = boundary;
             _zones = zones;
+            _missionZones = missionZones;
             _onlineLayers = true;
           });
         }
@@ -511,7 +515,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final zones = [..._zones];
+    // Las zonas verdes siempre se ven; una zona de interés solo aparece si la
+    // persona tiene una misión activa asociada a ella.
+    final zones = [
+      for (final zone in _zones)
+        if (!zone.interest || _missionZones.contains(zone.id)) zone,
+    ];
     if (widget.focusZone != null &&
         !zones.any((z) => z.id == widget.focusZone!.id)) {
       zones.add(widget.focusZone!);
@@ -863,7 +872,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   _LayerTile(
                     icon: Icons.place_outlined,
                     color: Colors.purpleAccent,
-                    title: 'Zonas de interés',
+                    title: 'Zonas de interés de tus misiones',
                     value: _interest,
                     onChanged: _onlineLayers
                         ? (v) => setState(() => _interest = v)

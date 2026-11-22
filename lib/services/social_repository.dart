@@ -1,4 +1,5 @@
 import 'package:latlong2/latlong.dart';
+
 import '../models/community.dart';
 import 'community_repository.dart';
 import 'observation_repository.dart';
@@ -133,6 +134,12 @@ class SocialRepository extends ObservationRepository {
   }) {
     final (progress, target) = progressOf(row['progress']);
     final end = row['periodEnd'];
+    CampusZone? zone;
+    if (row['poi'] is Map<String, dynamic>) {
+      try {
+        zone = decodeZone(row['poi'] as Map<String, dynamic>);
+      } catch (_) {}
+    }
     return Mission(
       id: row['id'] as String,
       title: row['name'] as String? ?? 'Reto',
@@ -142,6 +149,7 @@ class SocialRepository extends ObservationRepository {
       target: target,
       xp: (row['xpReward'] as num?)?.toInt() ?? 0,
       endsAt: end is String ? DateTime.tryParse(end) : null,
+      zone: zone,
       completedByServer:
           row['completed'] == true || row['status'] == 'COMPLETED',
     );
@@ -216,10 +224,32 @@ class SocialRepository extends ObservationRepository {
       dislikes: (row['totalDislikes'] as num?)?.toInt() ?? 0,
       liked: row['userVoteType'] == 'LIKE',
       disliked: row['userVoteType'] == 'DISLIKE',
-      observationId: row['observation'] as String?,
+      observationId: observationIdOf(row['observation']),
       comments: count,
-      sighting: sighting,
+      sighting: sighting ?? observationSummary(row['observation']),
     );
+  }
+
+  /// El backend envía la observación de la publicación como objeto
+  /// (ObservationSummaryResponse); versiones anteriores enviaban solo el id.
+  static String? observationIdOf(Object? value) => switch (value) {
+    String id when id.isNotEmpty => id,
+    {'id': final String id} => id,
+    _ => null,
+  };
+
+  /// Observación resumida de una publicación (sin ubicación ni espécimen).
+  static Sighting? observationSummary(Object? value) {
+    if (value is! Map<String, dynamic> || value['id'] is! String) return null;
+    try {
+      return ObservationRepository.decode({
+        'latitude': 0,
+        'longitude': 0,
+        ...value,
+      });
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<CommunityPost> _detail(String id) async {
@@ -233,9 +263,10 @@ class SocialRepository extends ObservationRepository {
     final row = results[0];
     final count = results[1];
     Sighting? sighting;
-    final observation = row['observation'];
-    if (observation is String && observation.isNotEmpty) {
+    final observation = observationIdOf(row['observation']);
+    if (observation != null) {
       try {
+        // Detalle completo (solo para el autor); si no, queda el resumen.
         sighting = ObservationRepository.decode(
           await api.get('/observations/${_id(observation)}'),
         );
@@ -293,10 +324,13 @@ class SocialRepository extends ObservationRepository {
         'Agrega una descripción: el servidor no acepta publicaciones sin ella.',
       );
     }
+    final observationId = draft.sighting?.id ?? draft.observationId;
     final body = <String, dynamic>{
       'title': draft.title.trim(),
       'description': draft.text.trim(),
-      'observation': draft.sighting?.id ?? draft.observationId ?? '',
+      // PostCreateRequest/PostUpdateRequest: campo observationId (UUID).
+      if (observationId != null && observationId.isNotEmpty)
+        'observationId': observationId,
     };
     if (id != null) {
       if (draft.photos.isNotEmpty) {
@@ -354,10 +388,8 @@ class SocialRepository extends ObservationRepository {
     if (row['id'] is! String) return _detail(id);
     // El servidor devuelve los totales correctos, pero el tipo de voto
     // anterior; el estado propio se toma de la acción solicitada.
-    return decodePost(row).copyWith(
-      liked: type == 'LIKE',
-      disliked: type == 'DISLIKE',
-    );
+    return decodePost(row)
+        .copyWith(liked: type == 'LIKE', disliked: type == 'DISLIKE');
   }
 
   static PostComment decodeComment(Map<String, dynamic> r) {
@@ -402,6 +434,7 @@ class SocialRepository extends ObservationRepository {
     }
     return out;
   }
+
   @override
   Future<List<PostComment>> comments(String postId) async {
     final roots = await _all('/comments?postId=${_id(postId)}');
@@ -542,10 +575,36 @@ class SocialRepository extends ObservationRepository {
   }
 
   @override
-  Future<List<CampusZone>> zones() async => (await _all('/pois'))
-      .where((r) => r['active'] != false && r['visibility'] == 'PUBLIC')
-      .map(decodeZone)
-      .toList();
+  Future<List<CampusZone>> zones() async =>
+      (await _all('/pois'))
+          .where((r) => r['active'] != false && r['visibility'] == 'PUBLIC')
+          .map(decodeZone)
+          .toList();
+
+  /// Id de la zona de una misión: objeto `poi` (PoiSummaryResponse) o `poiId`.
+  static String? missionZoneId(Map<String, dynamic> row) => switch (row) {
+    {'poi': {'id': final String id}} => id,
+    {'poiId': final String id} => id,
+    _ => null,
+  };
+
+  @override
+  Future<Set<String>> missionZoneIds() async {
+    try {
+      final board = await api.get('/missions/me');
+      return {
+        for (final key in const ['daily', 'weekly', 'event'])
+          for (final raw in (board[key] as List?) ?? const [])
+            if (raw is Map<String, dynamic> &&
+                raw['status'] == 'ACTIVE' &&
+                missionZoneId(raw) != null)
+              missionZoneId(raw)!,
+      };
+    } catch (_) {
+      return const {};
+    }
+  }
+
   @override
   Future<void> visit(LatLng point, double accuracy) async {
     if (!accuracy.isFinite || accuracy > 30 || accuracy < 0) return;

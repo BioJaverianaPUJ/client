@@ -360,12 +360,20 @@ class _GamificationScreenState extends State<GamificationScreen> {
                   ),
                 ),
               if (data.missionsAvailable)
-                for (final (period, subtitle) in const [
-                  ('Diarias', 'Se renuevan cada día'),
-                  ('Semanales', 'Se renuevan cada semana'),
-                  ('De evento', 'Solo por tiempo limitado'),
+                for (final (period, title, subtitle) in const [
+                  ('Diarias', 'Misiones diarias', 'Se renuevan cada día'),
+                  (
+                    'Semanales',
+                    'Misiones semanales',
+                    'Se renuevan cada semana',
+                  ),
+                  (
+                    'De evento',
+                    'Misiones de evento',
+                    'Solo por tiempo limitado',
+                  ),
                 ]) ...[
-                  _section('Misiones $period', subtitle: subtitle),
+                  _section(title, subtitle: subtitle),
                   for (final mission in sorted(
                     data.missions.where((m) => m.period == period),
                   ))

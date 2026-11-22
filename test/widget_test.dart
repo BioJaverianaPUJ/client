@@ -78,6 +78,36 @@ void main() {
     expect(storage.session, isNull);
   });
 
+  testWidgets('Una cuenta suspendida ve el aviso con la fecha de fin', (
+    tester,
+  ) async {
+    backend.on('POST', '/auth/login', (_) => json(sessionJson()));
+    backend.on(
+      'GET',
+      '/users/me',
+      (_) => json({
+        'status': 403,
+        'code': 'USER_DEACTIVATED',
+        'message':
+            'You have been temporarily banned from accessing this resource',
+        'details': {'banType': 'temporal', 'expiresAt': '2030-01-05T20:30:00Z'},
+      }, 403),
+    );
+    await pumpApp(tester);
+
+    await tester.enterText(field('usuario@javeriana.edu.co'), 'a@b.co');
+    await tester.enterText(field('Ingresa tu contraseña'), 'clave-segura');
+    await tapVisible(tester, find.text('Iniciar sesión'));
+
+    expect(
+      find.textContaining('Tu cuenta está suspendida hasta el'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('/01/2030'), findsOneWidget);
+    expect(find.text('Bienvenido'), findsOneWidget);
+    expect(storage.session, isNull);
+  });
+
   testWidgets('Inicia sesión, muestra el perfil real y cierra sesión', (
     tester,
   ) async {

@@ -52,6 +52,9 @@ class CommunityRepository {
   Future<void> deleteSighting(String id) => _pending();
   Future<List<LatLng>> campusBoundary() => _pending();
   Future<List<CampusZone>> zones() => _pending();
+
+  /// Zonas de interés asociadas a misiones activas de la persona.
+  Future<Set<String>> missionZoneIds() async => const {};
   Future<void> visit(LatLng point, double accuracy) => _pending();
   Future<ProgressSummary> progress({String? userId}) => _pending();
   Future<XpHistoryPage> xpHistory({int page = 0}) => _pending();

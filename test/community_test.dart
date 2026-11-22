@@ -331,6 +331,44 @@ void main() {
     },
   );
 
+  testWidgets('Tocar una foto de la publicación la abre a pantalla completa', (
+    tester,
+  ) async {
+    await setup(
+      tester,
+      Scaffold(
+        body: ListView(
+          children: [
+            PostCard(
+              post: CommunityPost(
+                id: 'p1',
+                authorId: 'u1',
+                authorName: 'ana',
+                title: 'Dos fotos',
+                date: DateTime(2026, 11, 22),
+                images: const [
+                  'https://img.test/a.jpg',
+                  'https://img.test/b.jpg',
+                ],
+              ),
+              onChanged: () {},
+            ),
+          ],
+        ),
+      ),
+      repo: TestCommunity(),
+    );
+    await tester.tap(find.byType(PageView).first);
+    // Se espera el tiempo del doble toque (que es "me gusta").
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.byType(ImageViewer), findsOneWidget);
+    expect(find.text('1/2'), findsWidgets);
+    await tester.tap(find.byTooltip('Cerrar'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ImageViewer), findsNothing);
+  });
+
   testWidgets('Suspensión invalida sesión y muestra aviso específico', (
     tester,
   ) async {

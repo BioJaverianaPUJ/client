@@ -217,9 +217,20 @@ class _PostCardState extends State<PostCard>
     );
   }
 
+  /// Fotos de la publicación más la de su observación vinculada.
+  List<String> get _media {
+    final photo = _post.sighting?.photo ?? '';
+    return [
+      ..._post.images,
+      if (photo.isNotEmpty && !_post.images.contains(photo)) photo,
+    ];
+  }
+
   Widget _gallery() {
-    final images = _post.images;
+    final images = _media;
     return GestureDetector(
+      // Un toque abre las fotos a pantalla completa; doble toque = me gusta.
+      onTap: () => openImageViewer(context, images, initial: _page),
       onDoubleTap: _doubleTapLike,
       child: SizedBox(
         height: 340,
@@ -316,7 +327,6 @@ class _PostCardState extends State<PostCard>
   }
 
   Widget _actions() {
-    final sighting = _post.sighting;
     return Padding(
       padding: const EdgeInsets.fromLTRB(6, 4, 12, 0),
       child: Row(
@@ -343,42 +353,6 @@ class _PostCardState extends State<PostCard>
             color: BioTheme.textPrimary,
             onTap: () => _toggleComments(focus: true),
           ),
-          const Spacer(),
-          if (sighting != null)
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: BioTheme.lime.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.eco_outlined,
-                      size: 14,
-                      color: BioTheme.lime,
-                    ),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        sighting.status.label,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: BioTheme.lime,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -512,9 +486,14 @@ class _PostCardState extends State<PostCard>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _header(mine),
-          if (_post.images.isNotEmpty) _gallery(),
+          if (_media.isNotEmpty) _gallery(),
           _actions(),
           _caption(),
+          if (_post.sighting != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: LinkedObservation(sighting: _post.sighting!),
+            ),
           _commentsToggle(),
           AnimatedSize(
             duration: const Duration(milliseconds: 280),
@@ -734,29 +713,6 @@ class _PostPreviewCardState extends State<PostPreviewCard> {
                   color: BioTheme.textPrimary,
                   size: 26,
                 ),
-                const Spacer(),
-                if (sighting != null)
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: BioTheme.lime.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text(
-                        sighting.status.label,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: BioTheme.lime,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -803,6 +759,11 @@ class _PostPreviewCardState extends State<PostPreviewCard> {
               ],
             ),
           ),
+          if (sighting != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: LinkedObservation(sighting: sighting),
+            ),
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 10, 16, 16),
             child: Text(
@@ -818,4 +779,273 @@ class _PostPreviewCardState extends State<PostPreviewCard> {
       ),
     );
   }
+}
+
+/// Tarjeta de la observación vinculada a una publicación: foto, especie,
+/// estado de verificación y similitud.
+class LinkedObservation extends StatelessWidget {
+  const LinkedObservation({super.key, required this.sighting});
+  final Sighting sighting;
+
+  @override
+  Widget build(BuildContext context) {
+    final verified = sighting.status == Verification.verified;
+    final similarity = sighting.similarity;
+    return GestureDetector(
+      onTap: sighting.photo.isEmpty
+          ? null
+          : () => openImageViewer(context, [sighting.photo]),
+      child: _tile(verified, similarity),
+    );
+  }
+
+  Widget _tile(bool verified, double? similarity) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: BioTheme.lime.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: BioTheme.lime.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox.square(
+              dimension: 52,
+              child: sighting.photo.isEmpty
+                  ? const ColoredBox(
+                      color: Color(0x22D4E27E),
+                      child: Icon(Icons.eco_outlined, color: BioTheme.lime),
+                    )
+                  : RemotePhoto(sighting.photo, height: 52),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'OBSERVACIÓN VINCULADA',
+                  style: TextStyle(
+                    color: BioTheme.lime,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  sighting.species,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: BioTheme.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontStyle: FontStyle.italic,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  [
+                    sighting.status.label,
+                    if (similarity != null)
+                      'similitud ${(similarity * 100).round()} %',
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: BioTheme.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            verified ? Icons.verified_rounded : Icons.eco_outlined,
+            color: verified ? BioTheme.lime : BioTheme.textMuted,
+            size: 22,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Abre una o varias imágenes a pantalla completa, con zoom y deslizamiento.
+Future<void> openImageViewer(
+  BuildContext context,
+  List<String> images, {
+  int initial = 0,
+}) {
+  if (images.isEmpty) return Future.value();
+  return Navigator.of(context).push(
+    PageRouteBuilder<void>(
+      opaque: false,
+      barrierColor: Colors.black,
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (_, _, _) => ImageViewer(
+        images: images,
+        initial: initial.clamp(0, images.length - 1),
+      ),
+      transitionsBuilder: (_, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
+    ),
+  );
+}
+
+class ImageViewer extends StatefulWidget {
+  const ImageViewer({super.key, required this.images, this.initial = 0});
+  final List<String> images;
+  final int initial;
+  @override
+  State<ImageViewer> createState() => _ImageViewerState();
+}
+
+class _ImageViewerState extends State<ImageViewer> {
+  late final _controller = PageController(initialPage: widget.initial);
+  late int _page = widget.initial;
+  // Mientras hay zoom no se cambia de foto al arrastrar.
+  bool _zoomed = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = widget.images.length;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _controller,
+            itemCount: count,
+            physics: _zoomed
+                ? const NeverScrollableScrollPhysics()
+                : const PageScrollPhysics(),
+            onPageChanged: (i) => setState(() => _page = i),
+            itemBuilder: (_, i) => _ZoomableImage(
+              url: widget.images[i],
+              onZoomChanged: (zoomed) {
+                if (zoomed != _zoomed) setState(() => _zoomed = zoomed);
+              },
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                  ),
+                  const Spacer(),
+                  if (count > 1)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        '${_page + 1}/$count',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ZoomableImage extends StatefulWidget {
+  const _ZoomableImage({required this.url, required this.onZoomChanged});
+  final String url;
+  final ValueChanged<bool> onZoomChanged;
+  @override
+  State<_ZoomableImage> createState() => _ZoomableImageState();
+}
+
+class _ZoomableImageState extends State<_ZoomableImage>
+    with SingleTickerProviderStateMixin {
+  final _transform = TransformationController();
+  late final AnimationController _animation = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+  )..addListener(() => _transform.value = _tween!.evaluate(_animation));
+  Matrix4Tween? _tween;
+  TapDownDetails? _doubleTap;
+
+  @override
+  void dispose() {
+    _animation.dispose();
+    _transform.dispose();
+    super.dispose();
+  }
+
+  void _toggleZoom() {
+    final zoomed = _transform.value.getMaxScaleOnAxis() > 1.01;
+    final position = _doubleTap?.localPosition ?? Offset.zero;
+    final end = zoomed
+        ? Matrix4.identity()
+        : (Matrix4.identity()
+            ..translateByDouble(-position.dx * 1.5, -position.dy * 1.5, 0, 1)
+            ..scaleByDouble(2.5, 2.5, 1, 1));
+    _tween = Matrix4Tween(begin: _transform.value, end: end);
+    _animation.forward(from: 0);
+    widget.onZoomChanged(!zoomed);
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onDoubleTapDown: (d) => _doubleTap = d,
+    onDoubleTap: _toggleZoom,
+    child: InteractiveViewer(
+      transformationController: _transform,
+      minScale: 1,
+      maxScale: 5,
+      onInteractionEnd: (_) =>
+          widget.onZoomChanged(_transform.value.getMaxScaleOnAxis() > 1.01),
+      child: Center(
+        child: Image.network(
+          RemotePhoto.resolve(widget.url),
+          fit: BoxFit.contain,
+          width: double.infinity,
+          height: double.infinity,
+          loadingBuilder: (_, child, progress) => progress == null
+              ? child
+              : const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+          errorBuilder: (_, _, _) => const Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white54,
+              size: 48,
+              semanticLabel: 'Imagen no disponible',
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }

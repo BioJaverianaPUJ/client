@@ -72,6 +72,45 @@ void main() {
     api.close();
   });
 
+  test(
+    'post links its observation with observationId and reads it back',
+    () async {
+      Map<String, dynamic>? sent;
+      final api = ApiClient(
+        httpClient: MockClient((request) async {
+          sent = jsonDecode(request.body) as Map<String, dynamic>;
+          return json({
+            ...post(),
+            // PostResponse.observation es un ObservationSummaryResponse.
+            'observation': {
+              'id': 'obs-1',
+              'imageUrl': 'https://img.test/obs.jpg',
+              'speciesCommonName': 'Pino romerón',
+              'observationType': 'PLANT',
+              'checked': true,
+              'similarityScore': 0.675,
+              'certainty': 0.004,
+              'createdAt': '2026-11-22T12:00:00Z',
+            },
+          });
+        }),
+      );
+      final saved = await SocialRepository(api).savePost(
+        const PostDraft(
+          title: 'Campus',
+          text: 'Con observación',
+          observationId: 'obs-1',
+        ),
+      );
+      expect(sent!['observationId'], 'obs-1');
+      expect(sent!.containsKey('observation'), false);
+      expect(saved.observationId, 'obs-1');
+      expect(saved.sighting!.photo, 'https://img.test/obs.jpg');
+      expect(saved.sighting!.species, 'Pino romerón');
+      api.close();
+    },
+  );
+
   test('failed storage upload does not publish a post', () async {
     var published = false;
     final api = ApiClient(
@@ -351,5 +390,30 @@ void main() {
     expect(PostDraft(title: 'a' * 201).validate(), isNotNull);
     expect(PostDraft(title: 'Válido', text: 'b' * 201).validate(), isNotNull);
     expect(const PostDraft(title: 'Válido').validate(), isNull);
+  });
+
+  test('only active missions with a zone reveal interest zones', () async {
+    final api = ApiClient(
+      httpClient: MockClient(
+        (_) async => json({
+          'daily': [
+            {'id': 'm1', 'status': 'ACTIVE', 'poiId': 'zona-1'},
+            {'id': 'm2', 'status': 'COMPLETED', 'poiId': 'zona-2'},
+          ],
+          'weekly': [
+            {
+              'id': 'm3',
+              'status': 'ACTIVE',
+              'poi': {'id': 'zona-3', 'name': 'Jardín'},
+            },
+          ],
+          'event': [
+            {'id': 'm4', 'status': 'ACTIVE'},
+          ],
+        }),
+      ),
+    );
+    expect(await SocialRepository(api).missionZoneIds(), {'zona-1', 'zona-3'});
+    api.close();
   });
 }

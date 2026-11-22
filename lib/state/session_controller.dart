@@ -89,7 +89,29 @@ class SessionController extends ChangeNotifier {
 
   Future<void> login({required String email, required String password}) async {
     final session = await _auth.login(email: email, password: password);
+    await _rejectIfSuspended(session);
     await _start(session);
+  }
+
+  /// El backend acepta el login de una cuenta suspendida y la bloquea en la
+  /// siguiente petición (USER_DEACTIVATED). Se comprueba antes de entrar para
+  /// mostrar el aviso en la pantalla de inicio de sesión.
+  Future<void> _rejectIfSuspended(AuthSession session) async {
+    final previousToken = _api.token;
+    final handler = _api.onDeactivated;
+    _api.token = session.token;
+    _api.onDeactivated = null;
+    try {
+      await _users.me();
+    } on ApiException catch (e) {
+      if (e.kind == ApiErrorKind.deactivated) {
+        _api.token = previousToken;
+        rethrow;
+      }
+      // Otros errores no impiden entrar; el perfil se vuelve a pedir luego.
+    } finally {
+      _api.onDeactivated = handler;
+    }
   }
 
   Future<void> register(RegistrationData data) async {

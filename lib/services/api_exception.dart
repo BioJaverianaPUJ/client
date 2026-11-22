@@ -22,17 +22,23 @@ class ApiException implements Exception {
     this.statusCode,
     this.code,
     this.serverMessage,
+    this.details = const {},
   });
 
   factory ApiException.fromResponse(int statusCode, String body) {
     String? code;
     String? serverMessage;
+    Map<String, dynamic> details = const {};
 
     try {
       final decoded = jsonDecode(body);
       if (decoded is Map<String, dynamic>) {
         code = decoded['code'] as String?;
         serverMessage = decoded['message'] as String?;
+        // ErrorResponse: { status, code, message, path, timestamp, details }.
+        if (decoded['details'] is Map<String, dynamic>) {
+          details = decoded['details'] as Map<String, dynamic>;
+        }
       }
     } on FormatException {
       code = null;
@@ -62,6 +68,7 @@ class ApiException implements Exception {
       statusCode: statusCode,
       code: code,
       serverMessage: serverMessage,
+      details: details,
     );
   }
 
@@ -69,19 +76,36 @@ class ApiException implements Exception {
   final int? statusCode;
   final String? code;
   final String? serverMessage;
+  final Map<String, dynamic> details;
+
+  /// Fin de una suspensión temporal (details.expiresAt de USER_DEACTIVATED).
+  DateTime? get banExpiresAt {
+    final value = details['expiresAt'];
+    return value is String ? DateTime.tryParse(value)?.toLocal() : null;
+  }
+
+  String get _suspension {
+    final until = banExpiresAt;
+    if (details['banType'] == 'permanent' || until == null) {
+      return 'Tu cuenta está suspendida de forma indefinida. Si crees que es un error, comunícate con los administradores de BioJaveriana.';
+    }
+    String two(int v) => v.toString().padLeft(2, '0');
+    final hour = until.hour % 12 == 0 ? 12 : until.hour % 12;
+    final when =
+        '${two(until.day)}/${two(until.month)}/${until.year} a las $hour:${two(until.minute)} ${until.hour < 12 ? 'a. m.' : 'p. m.'}';
+    return 'Tu cuenta está suspendida hasta el $when. Podrás volver a entrar después de esa fecha.';
+  }
 
   String get message => code == 'USERNAME_CHANGE_COOLDOWN'
       ? 'Solo puedes cambiar tu nombre de usuario una vez cada dos semanas.'
       : switch (kind) {
-          ApiErrorKind.network =>
-            'No hay conexión con el servidor. Revisa tu internet e intenta de nuevo.',
+          ApiErrorKind.network => 'No hay conexión con el servidor. Revisa tu internet e intenta de nuevo.',
           ApiErrorKind.timeout =>
             'El servidor tardó demasiado en responder. Intenta de nuevo.',
           ApiErrorKind.invalidCredentials => 'Correo o contraseña incorrectos.',
           ApiErrorKind.unauthorized =>
             'Tu sesión expiró. Inicia sesión de nuevo.',
-          ApiErrorKind.deactivated =>
-            'Tu cuenta está suspendida. No puedes acceder mientras permanezca bloqueada.',
+          ApiErrorKind.deactivated => _suspension,
           ApiErrorKind.forbidden =>
             'No tienes permiso para realizar esta acción.',
           ApiErrorKind.emailTaken => 'Ya existe una cuenta con este correo.',

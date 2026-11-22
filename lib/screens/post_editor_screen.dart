@@ -5,7 +5,7 @@ import '../services/photo_service.dart';
 import '../state/app_scope.dart';
 import '../theme/bio_theme.dart';
 import '../widgets/community_widgets.dart';
-import '../widgets/post_card.dart' show PostPreviewCard;
+import '../widgets/post_card.dart' show LinkedObservation, PostPreviewCard;
 
 class PostEditorScreen extends StatefulWidget {
   const PostEditorScreen({super.key, this.post, this.sighting});
@@ -81,6 +81,15 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
                     children: [
                       for (final sighting in sightings)
                         ListTile(
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox.square(
+                              dimension: 48,
+                              child: sighting.photo.isEmpty
+                                  ? const Icon(Icons.eco_outlined)
+                                  : RemotePhoto(sighting.photo, height: 48),
+                            ),
+                          ),
                           title: Text(sighting.species),
                           subtitle: Text(sighting.status.label),
                           onTap: () => Navigator.pop(context, sighting),
@@ -189,6 +198,10 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
         width: double.infinity,
         fit: BoxFit.cover,
       ),
+    // La foto de la observación vinculada también se muestra en la publicación.
+    if ((_sighting?.photo ?? '').isNotEmpty &&
+        !_retained.contains(_sighting!.photo))
+      RemotePhoto(_sighting!.photo, height: 340),
   ];
 
   Widget _photoPicker() {
@@ -345,33 +358,11 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
     trailing: _sighting == null ? 'Opcional' : null,
     children: [
       if (_sighting != null)
-        Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
-          decoration: BoxDecoration(
-            color: BioTheme.backgroundDeep.withValues(alpha: .4),
-            borderRadius: BorderRadius.circular(18),
-          ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
           child: Row(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _sighting!.species,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    Text(
-                      _sighting!.status.label,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: BioTheme.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              Expanded(child: LinkedObservation(sighting: _sighting!)),
               IconButton(
                 tooltip: 'Desvincular observación',
                 onPressed: _busy
