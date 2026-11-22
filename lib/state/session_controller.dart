@@ -24,7 +24,7 @@ class SessionController extends ChangeNotifier {
     this.autoRefresh = true,
     CommunityRepository? community,
     AccountRepository? account,
-  }) : account = account ?? AccountRepository(),
+  }) : account = account ?? ApiAccountRepository(api),
        community = community ?? SocialRepository(api),
        _api = api,
        _auth = AuthService(api),

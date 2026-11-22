@@ -96,7 +96,7 @@ void main() {
       'email': 'brayan@example.com',
       'password': 'clave-segura',
     });
-    expect(find.text('La vida del campus'), findsOneWidget);
+    expect(find.text('¿Qué descubriste hoy en el campus?'), findsOneWidget);
     expect(storage.session?.token, 'token-de-prueba');
 
     await tapVisible(tester, find.text('Perfil'));
@@ -105,11 +105,8 @@ void main() {
     expect(find.text('Brayan Fajardo'), findsOneWidget);
     expect(find.text('@brayanfajardo'), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.text('Cerrar sesión'),
-      350,
-      scrollable: find.byType(Scrollable).first,
-    );
+    // Las opciones de cuenta viven en el menú de configuración del perfil.
+    await tapVisible(tester, find.byTooltip('Configuración'));
     await tapVisible(tester, find.text('Cerrar sesión'));
 
     expect(find.text('Bienvenido'), findsOneWidget);
@@ -136,13 +133,29 @@ void main() {
     await tapVisible(tester, find.text('Masculino'));
     await tester.enterText(field('Mínimo 8 caracteres'), 'clave-segura');
     await tester.enterText(field('Repite tu contraseña'), 'clave-segura');
+
+    // RF-03: sin aceptar la política no se envía el registro.
+    await tapVisible(tester, find.text('Crear cuenta').last);
+    expect(backend.requests.where((r) => r.method == 'POST'), isEmpty);
+    expect(
+      find.text(
+        'Para crear tu cuenta debes aceptar la política de tratamiento de datos.',
+      ),
+      findsOneWidget,
+    );
+
+    await tapVisible(tester, find.byType(Checkbox));
     await tapVisible(tester, find.text('Crear cuenta').last);
 
     final register = backend.requests.firstWhere(
       (request) => request.method == 'POST',
     );
     expect(register.url.path, '/api/v1/auth/register');
-    expect(jsonDecode(register.body), {
+    final body = jsonDecode(register.body) as Map<String, dynamic>;
+    final acceptedAt = body.remove('dataPolicyAcceptedAt');
+    expect(DateTime.tryParse(acceptedAt as String), isNotNull);
+    expect(body.remove('dataPolicyVersion'), isNotEmpty);
+    expect(body, {
       'firstName': 'Brayan',
       'lastName': 'Fajardo',
       'username': 'brayanfajardo',
@@ -150,7 +163,7 @@ void main() {
       'gender': 'MALE',
       'password': 'clave-segura',
     });
-    expect(find.text('La vida del campus'), findsOneWidget);
+    expect(find.text('¿Qué descubriste hoy en el campus?'), findsOneWidget);
   });
 
   testWidgets('Una sesión guardada vigente entra directo al inicio', (
@@ -159,7 +172,7 @@ void main() {
     storage.session = AuthSession.fromJson(sessionJson());
     await pumpApp(tester);
 
-    expect(find.text('La vida del campus'), findsOneWidget);
+    expect(find.text('¿Qué descubriste hoy en el campus?'), findsOneWidget);
   });
 
   testWidgets('Una sesión guardada vencida vuelve al login con aviso', (

@@ -25,6 +25,7 @@ class CommunityRepository {
   Future<void> react(String id, String? emoji) => _pending();
   Future<List<Map<String, dynamic>>> myReports() => _pending();
   Future<List<PostComment>> comments(String postId) => _pending();
+  Future<PostComment> comment(String id) => _pending();
   Future<void> saveComment(
     String postId,
     String text, {
@@ -53,4 +54,5 @@ class CommunityRepository {
   Future<List<CampusZone>> zones() => _pending();
   Future<void> visit(LatLng point, double accuracy) => _pending();
   Future<ProgressSummary> progress({String? userId}) => _pending();
+  Future<XpHistoryPage> xpHistory({int page = 0}) => _pending();
 }

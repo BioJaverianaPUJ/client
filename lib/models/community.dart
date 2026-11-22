@@ -76,6 +76,30 @@ class CommunityPost {
   final int likes, dislikes, comments;
   final bool disliked;
   final bool liked;
+
+  CommunityPost copyWith({
+    int? likes,
+    int? dislikes,
+    int? comments,
+    bool? liked,
+    bool? disliked,
+  }) => CommunityPost(
+    id: id,
+    authorId: authorId,
+    authorName: authorName,
+    title: title,
+    date: date,
+    text: text,
+    images: images,
+    avatar: avatar,
+    sighting: sighting,
+    observationId: observationId,
+    likes: likes ?? this.likes,
+    dislikes: dislikes ?? this.dislikes,
+    comments: comments ?? this.comments,
+    liked: liked ?? this.liked,
+    disliked: disliked ?? this.disliked,
+  );
 }
 
 class PostDraft {
@@ -107,6 +131,14 @@ class PostDraft {
   }
 }
 
+/// Resumen de una reacción (emoji) de un comentario y quiénes la usaron.
+class CommentReactionCount {
+  const CommentReactionCount(this.emoji, this.count, [this.userIds = const []]);
+  final String emoji;
+  final int count;
+  final List<String> userIds;
+}
+
 class PostComment {
   const PostComment({
     required this.id,
@@ -116,17 +148,69 @@ class PostComment {
     required this.date,
     this.reactions = 0,
     this.parentId,
+    this.avatar,
+    this.reactionSummary = const [],
   });
   final String id, authorId, authorName, text;
   final DateTime date;
   final String? parentId;
   final int reactions;
+  final String? avatar;
+
+  /// Desglose por emoji. Vacío cuando el servidor solo envió el total.
+  final List<CommentReactionCount> reactionSummary;
+
+  /// Reacción del usuario indicado, si existe.
+  String? reactionOf(String? userId) {
+    if (userId == null) return null;
+    for (final r in reactionSummary) {
+      if (r.userIds.contains(userId)) return r.emoji;
+    }
+    return null;
+  }
+
+  /// Copia con la reacción de [userId] cambiada a [emoji] (null la retira).
+  PostComment withReaction(String userId, String? emoji) {
+    final previous = reactionOf(userId);
+    final summary = <CommentReactionCount>[];
+    for (final r in reactionSummary) {
+      final ids = r.userIds.where((id) => id != userId).toList();
+      if (r.emoji == emoji) ids.add(userId);
+      if (ids.isNotEmpty || (r.count - r.userIds.length) > 0) {
+        summary.add(
+          CommentReactionCount(
+            r.emoji,
+            ids.length + (r.count - r.userIds.length),
+            ids,
+          ),
+        );
+      }
+    }
+    if (emoji != null && !summary.any((r) => r.emoji == emoji)) {
+      summary.add(CommentReactionCount(emoji, 1, [userId]));
+    }
+    final delta = (emoji != null ? 1 : 0) - (previous != null ? 1 : 0);
+    return PostComment(
+      id: id,
+      authorId: authorId,
+      authorName: authorName,
+      text: text,
+      date: date,
+      parentId: parentId,
+      avatar: avatar,
+      reactions: reactions + delta < 0 ? 0 : reactions + delta,
+      reactionSummary: summary,
+    );
+  }
 }
 
 class FeedPage {
-  const FeedPage(this.items, {this.nextCursor});
+  const FeedPage(this.items, {this.nextCursor, this.total});
   final List<CommunityPost> items;
   final String? nextCursor;
+
+  /// Total de publicaciones según el servidor, si lo informa.
+  final int? total;
 }
 
 class CampusZone {
@@ -147,12 +231,14 @@ class Mission {
     required this.xp,
     this.endsAt,
     this.zone,
+    this.completedByServer,
   });
   final String id, title, description, period;
   final int progress, target, xp;
   final DateTime? endsAt;
   final CampusZone? zone;
-  bool get completed => progress >= target;
+  final bool? completedByServer;
+  bool get completed => completedByServer ?? (target > 0 && progress >= target);
 }
 
 class Curiosity {
@@ -174,8 +260,34 @@ class ProgressSummary {
     this.missions = const [],
     this.achievements = const [],
     this.curiosity,
+    this.nextLevelXp,
+    this.levelProgress,
+    this.missionsAvailable = true,
   });
   final int xp, level;
   final List<Mission> missions, achievements;
   final Curiosity? curiosity;
+  final int? nextLevelXp;
+  final double? levelProgress;
+  final bool missionsAvailable;
+}
+
+class XpHistoryEntry {
+  const XpHistoryEntry({
+    required this.id,
+    required this.amount,
+    required this.reason,
+    required this.totalAfter,
+    required this.levelAfter,
+    required this.date,
+  });
+  final String id, reason;
+  final int amount, totalAfter, levelAfter;
+  final DateTime date;
+}
+
+class XpHistoryPage {
+  const XpHistoryPage(this.items, {required this.hasMore});
+  final List<XpHistoryEntry> items;
+  final bool hasMore;
 }

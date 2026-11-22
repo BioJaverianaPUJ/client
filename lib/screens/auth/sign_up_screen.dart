@@ -14,6 +14,7 @@ import '../../widgets/bio_illustration.dart';
 import '../../widgets/bio_pressable.dart';
 import '../../widgets/glass/glass_button.dart';
 import '../../widgets/glass/soft_frost_glass.dart';
+import 'data_policy_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -35,7 +36,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _hidePassword = true;
   bool _hideConfirmPassword = true;
   bool _loading = false;
+  bool _acceptedPolicy = false;
+  DateTime? _acceptedAt;
   String? _error;
+
+  static const _policyError =
+      'Para crear tu cuenta debes aceptar la política de tratamiento de datos.';
+
+  void _setPolicy(bool value) => setState(() {
+    _acceptedPolicy = value;
+    _acceptedAt = value ? DateTime.now() : null;
+    if (value && _error == _policyError) _error = null;
+  });
+
+  Future<void> _openPolicy() async {
+    final accepted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const DataPolicyScreen()),
+    );
+    if (accepted == true && mounted) _setPolicy(true);
+  }
 
   @override
   void dispose() {
@@ -78,6 +97,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (password != _confirmPassword.text) {
       return 'Las contraseñas no coinciden.';
     }
+    if (!_acceptedPolicy) {
+      return _policyError;
+    }
     return null;
   }
 
@@ -96,6 +118,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
       email: _email.text.trim(),
       gender: _gender!,
       password: _password.text,
+      dataPolicyAcceptedAt: _acceptedAt,
+      dataPolicyVersion: dataPolicyVersion,
     );
 
     setState(() => _loading = true);
@@ -244,32 +268,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     () => _hideConfirmPassword = !_hideConfirmPassword,
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'BioJaveriana está dirigida a personas mayores de 18 años. No verificamos tu edad.',
-                  ),
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.privacy_tip_outlined),
-                  title: const Text('Política de tratamiento de datos'),
-                  subtitle: const Text('Documento pendiente de publicación'),
-                  onTap: () => showDialog<void>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Política de tratamiento de datos'),
-                      content: const Text(
-                        'El documento de la política aún no está disponible. Cuando se publique, podrás leerlo y aceptar su contenido antes de registrarte. Esta versión no registra una aceptación de la política.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Entendido'),
-                        ),
-                      ],
-                    ),
-                  ),
+                _PolicyConsent(
+                  accepted: _acceptedPolicy,
+                  onChanged: _loading ? null : _setPolicy,
+                  onRead: _loading ? null : _openPolicy,
                 ),
                 if (_error != null) AuthMessage(text: _error!),
                 GlassButton(
@@ -381,4 +383,84 @@ class _GenderChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Autorización expresa del tratamiento de datos y declaración de mayoría de
+/// edad, obligatorias antes de crear la cuenta (RF-03, Ley 1581 de 2012).
+class _PolicyConsent extends StatelessWidget {
+  const _PolicyConsent({
+    required this.accepted,
+    required this.onChanged,
+    required this.onRead,
+  });
+  final bool accepted;
+  final ValueChanged<bool>? onChanged;
+  final VoidCallback? onRead;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(top: 4, bottom: 14),
+    padding: const EdgeInsets.fromLTRB(6, 6, 14, 6),
+    decoration: BoxDecoration(
+      color: accepted
+          ? BioTheme.lime.withValues(alpha: 0.1)
+          : const Color.fromRGBO(255, 255, 255, 0.035),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(
+        color: accepted
+            ? BioTheme.lime
+            : const Color.fromRGBO(225, 238, 228, 0.16),
+      ),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Checkbox(
+          value: accepted,
+          onChanged: onChanged == null ? null : (v) => onChanged!(v ?? false),
+          activeColor: BioTheme.lime,
+          checkColor: BioTheme.backgroundDeep,
+          side: const BorderSide(color: BioTheme.textSecondary, width: 1.4),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: onChanged == null ? null : () => onChanged!(!accepted),
+                  child: const Text(
+                    'Autorizo el tratamiento de mis datos personales según la política de BioJaveriana y declaro que soy mayor de 18 años.',
+                    style: TextStyle(
+                      color: Color(0xFFEBF1ED),
+                      fontSize: 12.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: onRead,
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    foregroundColor: BioTheme.lime,
+                  ),
+                  icon: const Icon(Icons.privacy_tip_outlined, size: 16),
+                  label: const Text(
+                    'Leer la política de tratamiento de datos',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                      decorationColor: BioTheme.lime,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }

@@ -35,26 +35,55 @@ class _IdentifyScreenState extends State<IdentifyScreen> {
       _stage = 'Comprobando ubicación…';
     });
     try {
-      await LocationService.current();
+      await LocationService.ensurePermission();
       if (!mounted) return;
       setState(() => _stage = 'Abriendo cámara…');
       final photos = await PhotoService().pick(camera: true);
       if (photos.isEmpty || !mounted) return;
       final capturedAt = DateTime.now().toUtc();
-      setState(() => _stage = 'Obteniendo la ubicación de la captura…');
-      final position = await LocationService.current();
-      if (position.accuracy > 5) {
-        throw const FeatureUnavailable(
-          'La ubicación todavía no tiene suficiente precisión. Busca un lugar abierto y vuelve a tomar la fotografía.',
-        );
-      }
-      if (mounted) {
-        setState(() {
-          _photo = photos.single;
-          _location = position;
-          _capturedAt = capturedAt;
-        });
-      }
+      setState(() {
+        _photo = photos.single;
+        _capturedAt = capturedAt;
+        _stage = 'Afinando GPS; permanece en el lugar de la foto...';
+      });
+      await _locatePhoto();
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _locatePhoto() async {
+    if (_capturedAt == null ||
+        DateTime.now().toUtc().difference(_capturedAt!) >
+            const Duration(minutes: 2)) {
+      throw const FeatureUnavailable(
+        'La captura es antigua. Toma otra foto para registrar su ubicación actual.',
+      );
+    }
+    final position = await LocationService.precise(
+      onProgress: (position) {
+        if (mounted) {
+          setState(
+            () => _stage =
+                'Precisión GPS: ${position.accuracy.toStringAsFixed(1)} m. Necesitamos 5 m o menos; permanece aquí…',
+          );
+        }
+      },
+    );
+    if (mounted) setState(() => _location = position);
+  }
+
+  Future<void> _retryLocation() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+      _stage = 'Afinando la ubicación de esta foto...';
+    });
+    try {
+      await _locatePhoto();
     } catch (e) {
       if (mounted) setState(() => _error = e);
     } finally {
@@ -152,8 +181,10 @@ class _IdentifyScreenState extends State<IdentifyScreen> {
                         color: BioTheme.backgroundDeep.withValues(alpha: .72),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Text(
-                        'Foto lista para identificar',
+                      child: Text(
+                        _location == null
+                            ? 'Foto conservada: ubicación pendiente'
+                            : 'Foto lista para identificar',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -230,9 +261,25 @@ class _IdentifyScreenState extends State<IdentifyScreen> {
                 ],
               ),
             ),
+          if (_photo != null && _location == null) ...[
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _retryLocation,
+              icon: const Icon(Icons.my_location),
+              label: const Text('Reintentar ubicación sin repetir la foto'),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                'Reintenta desde el mismo lugar. Si te has movido, vuelve a tomar la foto.',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
           if (_photo != null) ...[
             FilledButton.icon(
-              onPressed: _busy || !available ? null : _send,
+              onPressed: _busy || !available || _location == null
+                  ? null
+                  : _send,
               icon: const Icon(Icons.auto_awesome_outlined),
               label: const Text('Identificar y guardar'),
             ),
@@ -281,7 +328,9 @@ class _IdentifyScreenState extends State<IdentifyScreen> {
             ),
           if (_error != null)
             StatusPanel(
-              title: 'No pudimos completar la captura',
+              title: _photo != null && _location == null
+                  ? 'Foto conservada; falta precisar la ubicación'
+                  : 'No pudimos completar la operacion',
               message: messageFor(_error!),
               icon: Icons.info_outline,
             ),

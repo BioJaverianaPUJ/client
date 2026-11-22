@@ -38,10 +38,10 @@ Referencia: SRS v0.3 de 78 páginas y backend main, commit 521722b. Este documen
 ## Validación y entrega
 
 - Flutter: análisis sin incidencias y 34 pruebas aprobadas; una prueba de capturas omitida por defecto.
-- Admin: 31 pruebas unitarias/de servidor, incluidas las respuestas de error de inicio de sesión. La compilación comprueba TypeScript y genera el sitio.
+- Admin: 29 pruebas unitarias/de servidor. La compilación comprueba TypeScript y genera el sitio.
 - Pruebas de navegador con respuestas simuladas: acceso, catálogo, borradores, usuarios, accesibilidad, revisiones, puntos de interés y denuncias.
 - Las pruebas automatizadas no crean usuarios, publicaciones ni sanciones en la base desplegada. Hace falta una prueba integrada con cuentas de prueba después de resolver los bloqueos anteriores.
-- Configuración local y claves excluidas de publicación. La actualización se publica en los repositorios client y adminWeb; la configuración local permanece excluida.
+- Configuración local y claves excluidas de publicación. No se hicieron commits ni pushes en esta revisión.
 
 ## Probar
 

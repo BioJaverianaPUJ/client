@@ -8,6 +8,7 @@ plugins {
 // Load release signing properties
 val keystorePropertiesFile = rootProject.file("app/key.properties")
 val keystoreProperties = Properties()
+val testBuild = providers.gradleProperty("bioTestBuild").orNull == "true" || System.getenv("BIOJAVER_TEST_BUILD") == "true"
 
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use {
@@ -27,6 +28,7 @@ android {
 
     defaultConfig {
         applicationId = "com.biojaveriana.client"
+        if (testBuild) applicationIdSuffix = ".preview"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -35,11 +37,7 @@ android {
 
     signingConfigs {
         create("release") {
-            if (!keystorePropertiesFile.exists()) {
-                throw GradleException(
-                    "Missing android/app/key.properties"
-                )
-            }
+          if (keystorePropertiesFile.exists()) {
 
             storeFile = file(
                 keystoreProperties.getProperty("storeFile")
@@ -54,12 +52,17 @@ android {
 
             keyPassword = keystoreProperties.getProperty("keyPassword")
                 ?: throw GradleException("Missing keyPassword")
+          }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            if (!testBuild && !keystorePropertiesFile.exists() &&
+                gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) }) {
+                throw GradleException("Missing android/app/key.properties for production signing")
+            }
+            signingConfig = signingConfigs.getByName(if (testBuild) "debug" else "release")
         }
 
         debug {

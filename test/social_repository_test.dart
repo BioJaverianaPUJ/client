@@ -27,6 +27,113 @@ http.Response json(Object value, [int status = 200]) => http.Response(
   headers: {'content-type': 'application/json'},
 );
 void main() {
+  test('post photos use the exact signed URL before publishing keys', () async {
+    const signedUrl =
+        'https://storage.example.test/bucket/posts/u/photo.jpg?X-Amz-Signature=abc123&X-Amz-Credential=user%2Fregion';
+    final calls = <String>[];
+    final api = ApiClient(
+      httpClient: MockClient((request) async {
+        calls.add(request.method);
+        if (request.url.path.endsWith('/presign')) {
+          expect(request.headers['Authorization'], 'Bearer session-token');
+          return json({
+            'url': signedUrl,
+            'key': 'posts/u/photo.jpg',
+            'method': 'PUT',
+            'contentType': 'image/jpeg',
+          });
+        }
+        if (request.method == 'PUT') {
+          expect(request.url.toString(), signedUrl);
+          expect(request.headers.containsKey('Authorization'), false);
+          expect(request.headers['Content-Type'], 'image/jpeg');
+          expect(request.bodyBytes, [1, 2, 3]);
+          expect(request.followRedirects, false);
+          return http.Response('', 200);
+        }
+        expect(request.url.path, '/api/v1/posts');
+        expect(jsonDecode(request.body)['imageKeys'], ['posts/u/photo.jpg']);
+        return json(post());
+      }),
+    )..token = 'session-token';
+    await SocialRepository(api).savePost(
+      PostDraft(
+        title: 'Campus',
+        text: 'Foto de prueba',
+        photos: [
+          LocalPhoto(Uint8List.fromList([1, 2, 3]), 'photo.jpg', 'image/jpeg'),
+        ],
+      ),
+    );
+    expect(calls, ['POST', 'PUT', 'POST']);
+    api.close();
+  });
+
+  test('failed storage upload does not publish a post', () async {
+    var published = false;
+    final api = ApiClient(
+      httpClient: MockClient((request) async {
+        if (request.url.path.endsWith('/presign')) {
+          return json({
+            'url': 'https://storage.example.test/photo.jpg',
+            'key': 'posts/u/photo.jpg',
+            'method': 'PUT',
+            'contentType': 'image/jpeg',
+          });
+        }
+        if (request.method == 'PUT') return http.Response('', 403);
+        published = true;
+        return json(post());
+      }),
+    );
+    await expectLater(
+      SocialRepository(api).savePost(
+        PostDraft(
+          title: 'Campus',
+          photos: [
+            LocalPhoto(Uint8List.fromList([1]), 'photo.jpg', 'image/jpeg'),
+          ],
+        ),
+      ),
+      throwsException,
+    );
+    expect(published, false);
+    api.close();
+  });
+
+  test('invalid signed upload metadata never sends an HTTP request', () async {
+    var calls = 0;
+    final api = ApiClient(
+      httpClient: MockClient((request) async {
+        calls++;
+        return http.Response('', 200);
+      }),
+    );
+    final photo = LocalPhoto(
+      Uint8List.fromList([1]),
+      'photo.jpg',
+      'image/jpeg',
+    );
+    for (final url in [
+      null,
+      42,
+      '',
+      'http://storage.example.test/a',
+      'https:///a',
+    ]) {
+      await expectLater(
+        api.uploadSignedPhoto(photo, {
+          'url': url,
+          'method': 'PUT',
+          'contentType': 'image/jpeg',
+        }),
+        throwsException,
+      );
+    }
+    expect(calls, 0);
+    api.close();
+  });
+
   test(
     'telemetry sends precise coordinates once and accepts an empty deduplicated response',
     () async {
@@ -166,6 +273,18 @@ void main() {
       'radiusMeters': 20,
     });
     expect(circle.points.length, 36);
+    // RF-22: el tipo del backend separa zonas verdes y de interés.
+    expect(polygon.interest, true);
+    final green = SocialRepository.decodeZone({
+      'id': 'g',
+      'name': 'Jardín',
+      'type': 'GREEN_ZONE',
+      'geometryType': 'POINT',
+      'centerLatitude': 4.628,
+      'centerLongitude': -74.064,
+      'radiusMeters': 10,
+    });
+    expect(green.interest, false);
   });
   test('RF14 uses similarity and plant matching rather than confidence', () {
     final r = <String, dynamic>{

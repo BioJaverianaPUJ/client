@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../widgets/level_badge.dart';
 import '../models/community.dart';
 import '../state/app_scope.dart';
 import '../widgets/bio_bottom_navigation.dart';
 import '../widgets/community_widgets.dart';
 import 'map_screen.dart';
+import 'xp_history_screen.dart';
 
 class GamificationScreen extends StatefulWidget {
   const GamificationScreen({super.key});
@@ -50,13 +52,14 @@ class _GamificationScreenState extends State<GamificationScreen> {
           Text(mission.description),
           const SizedBox(height: 12),
           Text(
-            '${mission.progress}/${mission.target} · ${mission.xp} XP${mission.completed ? ' · Completada' : ''}',
+            '${mission.target > 0 ? '${mission.progress}/${mission.target}' : 'Progreso: ${mission.progress}'} · ${mission.xp} XP${mission.completed ? ' · Completada' : ''}',
           ),
-          LinearProgressIndicator(
-            value: mission.target <= 0
-                ? 0
-                : (mission.progress / mission.target).clamp(0.0, 1.0),
-          ),
+          if (mission.completed || mission.target > 0)
+            LinearProgressIndicator(
+              value: mission.completed
+                  ? 1
+                  : (mission.progress / mission.target).clamp(0.0, 1.0),
+            ),
           if (mission.endsAt != null)
             Text('Disponible hasta ${dateLabel(mission.endsAt!.toLocal())}'),
           if (mission.zone != null)
@@ -115,27 +118,45 @@ class _GamificationScreenState extends State<GamificationScreen> {
               ),
             if (data != null) ...[
               ListTile(
-                leading: const Icon(Icons.workspace_premium, size: 40),
-                title: Text('Nivel ${data.level}'),
+                leading: LevelBadge(level: data.level, size: 52),
+                title: Text('Nivel ${data.level} · ${badgeName(data.level)}'),
                 subtitle: Text('${data.xp} puntos de experiencia'),
               ),
-              for (final period in ['Diarias', 'Semanales', 'De evento']) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+              TextButton.icon(
+                icon: const Icon(Icons.history),
+                label: const Text('Ver historial de experiencia'),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const XpHistoryScreen()),
+                ),
+              ),
+              if (!data.missionsAvailable)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                    'Misiones $period',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    'Las misiones por periodo no están disponibles en este servidor.',
                   ),
                 ),
-                for (final mission in data.missions.where(
-                  (m) => m.period == period && !m.completed,
-                ))
-                  _mission(mission),
-                if (!data.missions.any(
-                  (m) => m.period == period && !m.completed,
-                ))
-                  const Text('No tienes misiones pendientes en este periodo.'),
-              ],
+              if (data.missionsAvailable)
+                for (final period in ['Diarias', 'Semanales', 'De evento']) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      'Misiones $period',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  for (final mission in data.missions.where(
+                    (m) => m.period == period && !m.completed,
+                  ))
+                    _mission(mission),
+                  if (!data.missions.any(
+                    (m) => m.period == period && !m.completed,
+                  ))
+                    const Text(
+                      'No tienes misiones pendientes en este periodo.',
+                    ),
+                ],
               const SizedBox(height: 20),
               Text(
                 'Logros por completar',

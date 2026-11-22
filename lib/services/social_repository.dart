@@ -2,6 +2,7 @@ import 'package:latlong2/latlong.dart';
 import '../models/community.dart';
 import 'community_repository.dart';
 import 'observation_repository.dart';
+import 'api_exception.dart';
 
 /// Adapts the deployed social API without granting experience locally.
 class SocialRepository extends ObservationRepository {
@@ -13,6 +14,76 @@ class SocialRepository extends ObservationRepository {
   @override
   bool get observationRetryAvailable => false;
   String _id(String id) => Uri.encodeComponent(id);
+
+  @override
+  Future<ProgressSummary> progress({String? userId}) async {
+    try {
+      if (userId != null) {
+        final me = await api.get('/users/me');
+        if (me['id'] != userId) {
+          throw const FeatureUnavailable(
+            'El servidor solo permite consultar tu propia experiencia.',
+          );
+        }
+      }
+      final status = await api.get('/gamification/me');
+      final achievements = await api.get('/achievements/me');
+      final xp = (status['totalXp'] as num).toInt();
+      final lower = (status['xpForCurrentLevel'] as num).toInt();
+      final upper = (status['xpForNextLevel'] as num).toInt();
+      return ProgressSummary(
+        xp: xp,
+        level: (status['level'] as num).toInt(),
+        nextLevelXp: upper,
+        levelProgress: upper > lower
+            ? ((xp - lower) / (upper - lower)).clamp(0.0, 1.0)
+            : 1,
+        missionsAvailable: false,
+        achievements: (achievements['content'] as List).map((raw) {
+          final a = raw as Map<String, dynamic>;
+          return Mission(
+            id: a['id'] as String,
+            title: a['name'] as String,
+            description: a['description'] as String? ?? '',
+            period: 'Logros',
+            progress: (a['progress'] as num?)?.toInt() ?? 0,
+            target: (a['target'] as num?)?.toInt() ?? 0,
+            xp: (a['xpReward'] as num).toInt(),
+            completedByServer: a['completed'] == true,
+          );
+        }).toList(),
+      );
+    } on ApiException catch (e) {
+      if (e.statusCode == 404 || e.statusCode == 501) {
+        throw const FeatureUnavailable(
+          'La experiencia y los logros todavía no están habilitados en este servidor.',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<XpHistoryPage> xpHistory({int page = 0}) async {
+    if (page < 0) throw ArgumentError.value(page, 'page');
+    final result = await api.get(
+      '/gamification/me/xp-history?page=$page&size=20',
+    );
+    return XpHistoryPage(
+      (result['content'] as List).map((raw) {
+        final row = raw as Map<String, dynamic>;
+        return XpHistoryEntry(
+          id: row['id'] as String,
+          amount: (row['amount'] as num).toInt(),
+          reason: row['reason'] as String? ?? 'Experiencia registrada',
+          totalAfter: (row['totalAfter'] as num).toInt(),
+          levelAfter: (row['levelAfter'] as num).toInt(),
+          date: DateTime.parse(row['createdAt'] as String),
+        );
+      }).toList(),
+      hasMore: page + 1 < (result['totalPages'] as num),
+    );
+  }
 
   Future<List<Map<String, dynamic>>> _all(String path) async {
     final rows = <Map<String, dynamic>>[];
@@ -27,6 +98,9 @@ class SocialRepository extends ObservationRepository {
     return rows;
   }
 
+  static DateTime _date(Object? value) =>
+      (value is String ? DateTime.tryParse(value) : null) ?? DateTime.now();
+
   static CommunityPost decodePost(
     Map<String, dynamic> row, {
     Sighting? sighting,
@@ -40,10 +114,17 @@ class SocialRepository extends ObservationRepository {
       avatar: author['profilePictureUrl'] as String?,
       title: row['title'] as String? ?? '',
       text: row['description'] as String? ?? '',
-      date: DateTime.parse(row['createdAt'] as String),
-      images: (row['images'] as List? ?? [])
-          .map((e) => e['url'] as String)
-          .toList(),
+      // Al crear, el backend responde antes de guardar y envía createdAt nulo.
+      date: _date(row['createdAt']),
+      images: row['images'] is List
+          ? (row['images'] as List)
+                .map((e) => e['url'] as String?)
+                .whereType<String>()
+                .toList()
+          : [
+              if (row['firstImageUrl'] is String)
+                row['firstImageUrl'] as String,
+            ],
       likes: (row['totalLikes'] as num?)?.toInt() ?? 0,
       dislikes: (row['totalDislikes'] as num?)?.toInt() ?? 0,
       liked: row['userVoteType'] == 'LIKE',
@@ -55,8 +136,15 @@ class SocialRepository extends ObservationRepository {
   }
 
   Future<CommunityPost> _detail(String id) async {
-    final row = await api.get('/posts/${_id(id)}');
-    final count = await api.get('/comments/${_id(id)}/count');
+    // La publicación y su número de comentarios se piden a la vez.
+    final results = await Future.wait([
+      api.get('/posts/${_id(id)}'),
+      api
+          .get('/comments/${_id(id)}/count')
+          .catchError((Object _) => <String, dynamic>{}),
+    ]);
+    final row = results[0];
+    final count = results[1];
     Sighting? sighting;
     final observation = row['observation'];
     if (observation is String && observation.isNotEmpty) {
@@ -88,7 +176,14 @@ class SocialRepository extends ObservationRepository {
     for (var i = 0; i < rows.length; i += 3) {
       posts.addAll(
         await Future.wait(
-          rows.skip(i).take(3).map((r) => _detail(r['id'] as String)),
+          rows.skip(i).take(3).map((summary) async {
+            try {
+              return await _detail(summary['id'] as String);
+            } catch (_) {
+              // Una publicación con error no debe tumbar todo el inicio.
+              return decodePost(summary);
+            }
+          }),
         ),
       );
     }
@@ -97,6 +192,7 @@ class SocialRepository extends ObservationRepository {
       nextCursor: page + 1 < ((r['pagination'] as Map)['totalPages'] as num)
           ? '${page + 1}'
           : null,
+      total: ((r['pagination'] as Map)['totalElements'] as num?)?.toInt(),
     );
   }
 
@@ -104,6 +200,12 @@ class SocialRepository extends ObservationRepository {
   Future<CommunityPost> savePost(PostDraft draft, {String? id}) async {
     final validation = draft.validate();
     if (validation != null) throw FeatureUnavailable(validation);
+    if (draft.text.trim().isEmpty) {
+      // PostCreateRequest exige una descripción no vacía (@NotBlank).
+      throw const FeatureUnavailable(
+        'Agrega una descripción: el servidor no acepta publicaciones sin ella.',
+      );
+    }
     final body = <String, dynamic>{
       'title': draft.title.trim(),
       'description': draft.text.trim(),
@@ -126,13 +228,18 @@ class SocialRepository extends ObservationRepository {
         '/posts/presign',
         body: {'contentType': photo.mimeType},
       );
-      if ((signed['url'] as String? ?? '').isEmpty) {
+      final uploadUrl = signed['url'];
+      final uploadKey = signed['key'];
+      if (uploadUrl is! String ||
+          uploadUrl.trim().isEmpty ||
+          uploadKey is! String ||
+          uploadKey.trim().isEmpty) {
         throw const FeatureUnavailable(
-          'El servidor todavía no entrega una dirección para subir fotos de publicaciones. Tu publicación no se ha enviado; conserva el texto e inténtalo más tarde.',
+          'No se pudo preparar la carga de la foto. Tu publicación no se ha enviado; conserva el texto e inténtalo más tarde.',
         );
       }
       await api.uploadSignedPhoto(photo, signed);
-      keys.add(signed['key'] as String);
+      keys.add(uploadKey);
     }
     body['imageKeys'] = keys;
     return decodePost(
@@ -154,37 +261,96 @@ class SocialRepository extends ObservationRepository {
     if (type != null && !['LIKE', 'DISLIKE'].contains(type)) {
       throw ArgumentError.value(type);
     }
-    if (type == null) {
-      await api.delete('/posts/${_id(id)}/vote');
-    } else {
-      await api.post('/posts/${_id(id)}/vote', body: {'voteType': type});
-    }
-    return _detail(id);
+    final row = type == null
+        ? await api.delete('/posts/${_id(id)}/vote')
+        : await api.post('/posts/${_id(id)}/vote', body: {'voteType': type});
+    if (row['id'] is! String) return _detail(id);
+    // El servidor devuelve los totales correctos, pero el tipo de voto
+    // anterior; el estado propio se toma de la acción solicitada.
+    return decodePost(row).copyWith(
+      liked: type == 'LIKE',
+      disliked: type == 'DISLIKE',
+    );
   }
 
-  PostComment _comment(Map<String, dynamic> r) => PostComment(
-    id: r['id'] as String,
-    authorId: r['author']['id'] as String,
-    authorName: r['author']['username'] as String? ?? 'Usuario',
-    text: r['content'] as String,
-    date: DateTime.parse(r['createdAt'] as String),
-    parentId: r['parentId'] as String?,
-    reactions: (r['totalReactions'] as num?)?.toInt() ?? 0,
-  );
+  static PostComment decodeComment(Map<String, dynamic> r) {
+    final author = r['author'] as Map<String, dynamic>;
+    final summary = <CommentReactionCount>[];
+    for (final raw in (r['reactions'] as List? ?? const [])) {
+      final reaction = raw as Map<String, dynamic>;
+      final users = (reaction['users'] as List? ?? const [])
+          .map((u) => (u as Map<String, dynamic>)['id'])
+          .whereType<String>()
+          .toList();
+      summary.add(
+        CommentReactionCount(
+          reaction['emoji'] as String,
+          (reaction['count'] as num?)?.toInt() ?? users.length,
+          users,
+        ),
+      );
+    }
+    return PostComment(
+      id: r['id'] as String,
+      authorId: author['id'] as String,
+      authorName: author['username'] as String? ?? 'Usuario',
+      avatar: author['profilePictureUrl'] as String?,
+      text: r['content'] as String,
+      date: _date(r['createdAt']),
+      parentId: r['parentId'] as String?,
+      reactions: (r['totalReactions'] as num?)?.toInt() ?? 0,
+      reactionSummary: summary,
+    );
+  }
+
+  /// Ejecuta [task] sobre [items] con un máximo de [limit] peticiones a la vez.
+  Future<List<R>> _bounded<T, R>(
+    List<T> items,
+    Future<R> Function(T) task, {
+    int limit = 4,
+  }) async {
+    final out = <R>[];
+    for (var i = 0; i < items.length; i += limit) {
+      out.addAll(await Future.wait(items.skip(i).take(limit).map(task)));
+    }
+    return out;
+  }
   @override
   Future<List<PostComment>> comments(String postId) async {
     final roots = await _all('/comments?postId=${_id(postId)}');
-    final result = <PostComment>[];
-    for (final root in roots) {
-      result.add(_comment(root));
-      result.addAll(
-        (await _all(
-          '/comments/${_id(root['id'] as String)}/replies',
-        )).map(_comment),
+    roots.sort(
+      (a, b) => (a['createdAt'] as String).compareTo(b['createdAt'] as String),
+    );
+    final replies = await _bounded(
+      roots,
+      (root) => _all('/comments/${_id(root['id'] as String)}/replies'),
+    );
+    final rows = <Map<String, dynamic>>[];
+    for (var i = 0; i < roots.length; i++) {
+      rows.add(roots[i]);
+      rows.addAll(
+        replies[i]..sort(
+          (a, b) =>
+              (a['createdAt'] as String).compareTo(b['createdAt'] as String),
+        ),
       );
     }
-    return result;
+    // El listado solo trae el total de reacciones; el detalle trae cada emoji
+    // y quién reaccionó, necesario para mostrar la reacción propia.
+    return _bounded(rows, (row) async {
+      try {
+        return decodeComment(
+          await api.get('/comments/${_id(row['id'] as String)}'),
+        );
+      } catch (_) {
+        return decodeComment(row);
+      }
+    });
   }
+
+  @override
+  Future<PostComment> comment(String id) async =>
+      decodeComment(await api.get('/comments/${_id(id)}'));
 
   @override
   Future<void> saveComment(
@@ -283,7 +449,8 @@ class SocialRepository extends ObservationRepository {
       row['id'] as String,
       row['name'] as String,
       points,
-      interest: true,
+      // RF-22: el backend distingue zonas verdes y zonas de interés.
+      interest: row['type'] != 'GREEN_ZONE',
     );
   }
 

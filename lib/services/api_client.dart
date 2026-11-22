@@ -33,8 +33,12 @@ class ApiClient {
     LocalPhoto photo,
     Map<String, dynamic> signed,
   ) async {
-    final url = Uri.parse(signed['url'] as String);
-    if (url.scheme != 'https' ||
+    final rawUrl = signed['url'];
+    final url = rawUrl is String ? Uri.tryParse(rawUrl) : null;
+    if (url == null ||
+        url.scheme != 'https' ||
+        url.host.isEmpty ||
+        url.userInfo.isNotEmpty ||
         signed['method'] != 'PUT' ||
         signed['contentType'] != photo.mimeType) {
       throw const ApiException(ApiErrorKind.server);

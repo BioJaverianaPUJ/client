@@ -67,7 +67,7 @@ class _ProfileExperienceState extends State<ProfileExperience> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Nivel ${experience.level} · ${experience.xp} XP',
+                    'Nivel ${_progress!.level} · ${experience.xp} XP',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
@@ -75,12 +75,12 @@ class _ProfileExperienceState extends State<ProfileExperience> {
             ),
             const SizedBox(height: 16),
             LinearProgressIndicator(
-              value: experience.fraction,
+              value: _progress!.levelProgress ?? experience.fraction,
               semanticsLabel: 'Progreso al siguiente nivel',
             ),
             const SizedBox(height: 8),
             Text(
-              '${experience.nextThreshold - experience.xp} XP para el siguiente nivel',
+              '${((_progress!.nextLevelXp ?? experience.nextThreshold) - experience.xp).clamp(0, 2147483647)} XP para el siguiente nivel',
             ),
             for (final achievement in _progress!.achievements.where(
               (a) => a.completed,

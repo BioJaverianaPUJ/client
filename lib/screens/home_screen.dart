@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import '../models/community.dart';
 import '../services/community_repository.dart';
 import '../state/app_scope.dart';
-import '../navigation/app_routes.dart';
+import '../theme/bio_theme.dart';
+import '../widgets/post_comments.dart' show UserAvatar;
 import '../widgets/bio_bottom_navigation.dart';
 import '../widgets/community_widgets.dart';
 import 'post_editor_screen.dart';
-import 'post_detail_screen.dart';
-import 'profile_screen.dart';
+import '../widgets/post_card.dart';
+
+export '../widgets/post_card.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -83,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
       IconButton(
         tooltip: 'Crear publicación',
         onPressed: _compose,
-        icon: const Icon(Icons.add_box_outlined),
+        icon: const Icon(Icons.add_box_outlined, color: BioTheme.lime),
       ),
     ],
     body: RefreshIndicator(
@@ -92,41 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
         controller: _scroll,
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const BioPageHeading(
-                  eyebrow: 'Biodiversidad javeriana',
-                  title: 'La vida del campus',
-                  accent: 'se comparte.',
-                  description:
-                      'Descubrimientos, fotografías e historias de nuestra comunidad.',
-                ),
-                BioGlassAction(
-                  title: 'Comparte lo que descubriste',
-                  subtitle: 'Una fotografía. Una historia. Tu campus.',
-                  icon: Icons.edit_outlined,
-                  onTap: _compose,
-                ),
-                BioGlassAction(
-                  title: 'Biodiversidad del campus',
-                  subtitle:
-                      'Conoce las especies que comparten este espacio contigo.',
-                  icon: Icons.eco_outlined,
-                  onTap: () => Navigator.pushNamed(context, AppRoutes.explore),
-                ),
-              ],
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(24, 22, 24, 12),
-            child: Text(
-              'NUESTRA COMUNIDAD',
-              style: TextStyle(fontSize: 11, letterSpacing: 2),
-            ),
-          ),
+          _ComposerBar(onTap: _compose),
           for (final post in _posts)
             PostCard(post: post, onChanged: () => _load(reset: true)),
           if (_loading)
@@ -151,210 +119,89 @@ class _HomeScreenState extends State<HomeScreen> {
               message: 'Comparte el primer descubrimiento de la comunidad.',
             ),
           if (_loaded && _posts.isNotEmpty && _cursor == null)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: Text('Estás al día con la comunidad')),
-            ),
+            const _FeedEnd(),
         ],
       ),
     ),
   );
 }
 
-class PostCard extends StatefulWidget {
-  const PostCard({super.key, required this.post, required this.onChanged});
-  final CommunityPost post;
-  final VoidCallback onChanged;
-  @override
-  State<PostCard> createState() => _PostCardState();
-}
-
-class _PostCardState extends State<PostCard> {
-  bool _busy = false;
-  late CommunityPost _post = widget.post;
-  @override
-  void didUpdateWidget(PostCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _post = widget.post;
-  }
-
-  Future<void> _like({bool dislike = false}) async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
-      final post = await AppScope.read(context).community.vote(
-        _post.id,
-        dislike
-            ? (_post.disliked ? null : 'DISLIKE')
-            : (_post.liked ? null : 'LIKE'),
-      );
-      if (mounted) setState(() => _post = post);
-    } catch (e) {
-      if (mounted) showMessage(context, messageFor(e));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _menu(String action) async {
-    final repo = AppScope.read(context).community;
-    if (action == 'report') {
-      await reportContent(context, _post.id, comment: false);
-      return;
-    }
-    if (action == 'edit') {
-      final result = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(builder: (_) => PostEditorScreen(post: _post)),
-      );
-      if (result == true) widget.onChanged();
-      return;
-    }
-    if (!await confirmAction(
-      context,
-      'Eliminar publicación',
-      'Se eliminará la publicación y no podrás recuperarla.',
-    )) {
-      return;
-    }
-    try {
-      await repo.deletePost(_post.id);
-      if (mounted) widget.onChanged();
-    } catch (e) {
-      if (mounted) showMessage(context, messageFor(e));
-    }
-  }
-
+/// Acceso rápido para publicar, en lugar de los bloques que ocupaban el inicio.
+class _ComposerBar extends StatelessWidget {
+  const _ComposerBar({required this.onTap});
+  final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
-    final mine = AppScope.watch(context).user?.id == _post.authorId;
+    final user = AppScope.watch(context).user;
     return BioGlassCard(
       frosted: true,
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ListTile(
-            leading: _post.avatar != null
-                ? ClipOval(
-                    child: SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: RemotePhoto(_post.avatar!, height: 40),
-                    ),
-                  )
-                : CircleAvatar(
-                    child: Text(
-                      _post.authorName.isEmpty
-                          ? '?'
-                          : _post.authorName.substring(0, 1).toUpperCase(),
-                    ),
-                  ),
-            title: Text(_post.authorName),
-            subtitle: Text(dateLabel(_post.date.toLocal())),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ProfileScreen(userId: _post.authorId),
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(30),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          child: Row(
+            children: [
+              UserAvatar(
+                name: user?.username ?? '',
+                url: user?.profilePictureUrl,
+                size: 40,
+                ring: true,
               ),
-            ),
-            trailing: PopupMenuButton<String>(
-              tooltip: 'Opciones de publicación',
-              onSelected: _menu,
-              itemBuilder: (_) => [
-                if (mine)
-                  const PopupMenuItem(value: 'edit', child: Text('Editar')),
-                if (mine)
-                  const PopupMenuItem(value: 'delete', child: Text('Eliminar')),
-                if (!mine)
-                  const PopupMenuItem(
-                    value: 'report',
-                    child: Text('Denunciar'),
-                  ),
-              ],
-            ),
-          ),
-          if (_post.images.isNotEmpty)
-            SizedBox(
-              height: 300,
-              child: PageView(
-                children: [
-                  for (var i = 0; i < _post.images.length; i++)
-                    Stack(
-                      children: [
-                        RemotePhoto(_post.images[i], height: 300),
-                        Positioned(
-                          right: 12,
-                          top: 12,
-                          child: Chip(
-                            label: Text('${i + 1}/${_post.images.length}'),
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  '¿Qué descubriste hoy en el campus?',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: BioTheme.textMuted, fontSize: 14.5),
+                ),
               ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _post.title,
-                  style: Theme.of(context).textTheme.titleLarge,
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: BioTheme.lime.withValues(alpha: 0.16),
                 ),
-                if (_post.text.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(_post.text),
-                  ),
-                if (_post.sighting != null)
-                  Chip(
-                    avatar: const Icon(Icons.eco_outlined),
-                    label: Text(
-                      '${_post.sighting!.species} · ${_post.sighting!.status.label}',
-                    ),
-                  ),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    TextButton.icon(
-                      onPressed: _busy ? null : () => _like(),
-                      icon: Icon(
-                        _post.liked ? Icons.favorite : Icons.favorite_border,
-                      ),
-                      label: Text('${_post.likes} Me gusta'),
-                    ),
-                    TextButton.icon(
-                      onPressed: _busy ? null : () => _like(dislike: true),
-                      icon: Icon(
-                        _post.disliked
-                            ? Icons.thumb_down
-                            : Icons.thumb_down_outlined,
-                      ),
-                      label: Text('${_post.dislikes} No me gusta'),
-                    ),
-                    TextButton.icon(
-                      onPressed: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PostDetailScreen(post: _post),
-                          ),
-                        );
-                        if (mounted) widget.onChanged();
-                      },
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      label: Text('${_post.comments} comentarios'),
-                    ),
-                  ],
+                child: const Icon(
+                  Icons.add_photo_alternate_outlined,
+                  color: BioTheme.lime,
+                  size: 22,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+}
+
+class _FeedEnd extends StatelessWidget {
+  const _FeedEnd();
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.fromLTRB(24, 20, 24, 32),
+    child: Column(
+      children: [
+        Icon(Icons.check_circle_outline_rounded, color: BioTheme.lime, size: 40),
+        SizedBox(height: 10),
+        Text(
+          'Estás al día',
+          style: TextStyle(
+            color: BioTheme.textPrimary,
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          'Ya viste todas las publicaciones de la comunidad.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: BioTheme.textMuted, fontSize: 13),
+        ),
+      ],
+    ),
+  );
 }

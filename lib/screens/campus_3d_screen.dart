@@ -182,7 +182,7 @@ class _Campus3DScreenState extends State<Campus3DScreen> {
     final props = feature is Map ? feature['properties'] : null;
     final id = props is Map ? '${props['osmId'] ?? ''}' : '';
     try {
-      await _controller?.setFilter('buildings-selected', [
+      await _controller?.setLayerFilter('buildings-selected', [
         '==',
         ['get', 'osmId'],
         id,

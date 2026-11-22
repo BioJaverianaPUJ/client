@@ -30,7 +30,9 @@ class ObservationRepository extends CommunityRepository {
         (json['latitude'] as num).toDouble(),
         (json['longitude'] as num).toDouble(),
       ),
-      date: DateTime.parse(json['createdAt'] as String),
+      date:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.now(),
       // RF-14 uses similarity, not certainty; plants also require the server match.
       status: jobStatus == 'FAILED'
           ? Verification.failed
@@ -57,13 +59,24 @@ class ObservationRepository extends CommunityRepository {
       for (final raw in result['content'] as List) {
         final row = raw as Map<String, dynamic>;
         // List DTO omits failed jobs. Resolve unchecked items using their job.
-        items.add(
-          row['checked'] == true
-              ? decode(row)
-              : await refreshSighting(row['id'] as String),
-        );
+        try {
+          items.add(
+            row['checked'] == true
+                ? decode(row)
+                : await refreshSighting(row['id'] as String),
+          );
+        } catch (_) {
+          // Si el estado del trabajo no se puede consultar, se muestra la
+          // observación con los datos del listado en vez de perder la capa.
+          try {
+            items.add(decode(row));
+          } catch (_) {}
+        }
       }
-      pages = (result['totalPages'] as num).toInt();
+      // El backend envía el total dentro de "pagination".
+      final total =
+          (result['pagination'] as Map?)?['totalPages'] ?? result['totalPages'];
+      pages = total is num ? total.toInt() : 1;
       page++;
     } while (page < pages);
     return items;

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/community.dart';
+import '../navigation/app_routes.dart';
 import '../services/photo_service.dart';
 import '../state/app_scope.dart';
 import '../theme/bio_theme.dart';
 import '../widgets/community_widgets.dart';
+import '../widgets/post_card.dart' show PostPreviewCard;
 
 class PostEditorScreen extends StatefulWidget {
   const PostEditorScreen({super.key, this.post, this.sighting});
@@ -20,7 +22,7 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
   final List<LocalPhoto> _photos = [];
   late Sighting? _sighting = widget.sighting ?? widget.post?.sighting;
   String? _error;
-  bool _busy = false, _saved = false, _unlinked = false;
+  bool _busy = false, _saved = false, _unlinked = false, _preview = false;
   bool get _dirty =>
       _title.text != (widget.post?.title ?? '') ||
       _text.text != (widget.post?.text ?? '') ||
@@ -103,7 +105,9 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
       sighting: _sighting,
       observationId: _unlinked ? null : widget.post?.observationId,
     );
-    final error = draft.validate();
+    final error =
+        draft.validate() ??
+        (draft.text.isEmpty ? 'Agrega una descripción a tu publicación.' : null);
     if (error != null) {
       setState(() => _error = error);
       return;
@@ -118,8 +122,24 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
       ).community.savePost(draft, id: widget.post?.id);
       if (!mounted) return;
       setState(() => _saved = true);
+      final isNew = widget.post == null;
+      final messenger = ScaffoldMessenger.of(context);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) Navigator.pop(context, true);
+        if (!mounted) return;
+        if (isNew) {
+          // Lleva al inicio, que se recarga con la publicación nueva arriba.
+          AppRoutes.enterApp(context);
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('¡Listo! Tu publicación ya está en el inicio.'),
+            ),
+          );
+        } else {
+          Navigator.pop(context, true);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Cambios guardados.')),
+          );
+        }
       });
     } catch (e) {
       if (mounted) setState(() => _error = messageFor(e));
@@ -128,238 +148,474 @@ class _PostEditorScreenState extends State<PostEditorScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: _saved || (!_dirty && !_busy),
-    onPopInvokedWithResult: (didPop, result) async {
-      if (didPop || _busy) return;
-      if (await confirmAction(
-        context,
-        'Descartar cambios',
-        'Los cambios de esta publicación no se han guardado.',
-      )) {
-        if (!mounted) return;
-        setState(() => _saved = true);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) Navigator.pop(context);
-        });
-      }
-    },
-    child: CommunityScaffold(
-      title: widget.post == null ? 'Nueva publicación' : 'Editar publicación',
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-        children: [
-          const Text(
-            'Comparte una historia del campus',
-            style: TextStyle(
-              fontSize: 26,
-              height: 1.15,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -.6,
+  Future<void> _choosePhotoSource() async {
+    final camera = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: BioTheme.backgroundDeep,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Tomar foto'),
+              onTap: () => Navigator.pop(sheet, true),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Elegir de la galería'),
+              onTap: () => Navigator.pop(sheet, false),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (camera != null && mounted) await _pick(camera);
+  }
+
+  List<Widget> _previewImages() => [
+    for (final image in _retained) RemotePhoto(image, height: 340),
+    for (final photo in _photos)
+      Image.memory(
+        photo.bytes,
+        height: 340,
+        width: double.infinity,
+        fit: BoxFit.cover,
+      ),
+  ];
+
+  Widget _photoPicker() {
+    final total = _photos.length + _retained.length;
+    final editing = widget.post != null;
+    if (total == 0 && !editing) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: _busy ? null : _choosePhotoSource,
+        child: Container(
+          height: 210,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: BioTheme.lime.withValues(alpha: 0.35),
+              width: 1.4,
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Las fotos de una publicación no se usan para identificar especies.',
-            style: TextStyle(color: BioTheme.textSecondary, height: 1.4),
-          ),
-          const SizedBox(height: 22),
-          TextField(
-            controller: _title,
-            onChanged: (_) => setState(() {}),
-            enabled: !_busy,
-            maxLength: 200,
-            decoration: const InputDecoration(labelText: 'Título *'),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _text,
-            onChanged: (_) => setState(() {}),
-            enabled: !_busy,
-            maxLength: 200,
-            minLines: 3,
-            maxLines: 8,
-            decoration: const InputDecoration(
-              labelText: 'Cuéntanos más (opcional)',
-              alignLabelWithHint: true,
-            ),
-          ),
-          const SizedBox(height: 20),
-          _EditorSection(
-            icon: Icons.photo_library_outlined,
-            title: 'Imágenes',
-            trailing: '${_photos.length + _retained.length}/10',
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (widget.post != null)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: Text(
-                    'Por ahora puedes editar el texto y la observación; las imágenes se conservan.',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: BioTheme.textSecondary,
-                    ),
-                  ),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: BioTheme.lime.withValues(alpha: 0.14),
                 ),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _busy || widget.post != null
-                          ? null
-                          : () => _pick(true),
-                      icon: const Icon(Icons.camera_alt_outlined),
-                      label: const Text('Cámara'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _busy || widget.post != null
-                          ? null
-                          : () => _pick(false),
-                      icon: const Icon(Icons.photo_library_outlined),
-                      label: const Text('Galería'),
-                    ),
-                  ),
-                ],
+                child: const Icon(
+                  Icons.add_photo_alternate_outlined,
+                  size: 36,
+                  color: BioTheme.lime,
+                ),
               ),
-              if (_retained.isNotEmpty || _photos.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                SizedBox(
-                  height: 112,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      for (final image in [..._retained])
-                        _Thumb(
-                          image: RemotePhoto(image, height: 112),
-                          onRemove: _busy || widget.post != null
-                              ? null
-                              : () => setState(() => _retained.remove(image)),
-                        ),
-                      for (final photo in [..._photos])
-                        _Thumb(
-                          image: Image.memory(
-                            photo.bytes,
-                            height: 112,
-                            width: 112,
-                            fit: BoxFit.cover,
+              const SizedBox(height: 14),
+              const Text(
+                'Agrega fotos de tu descubrimiento',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Hasta 10 imágenes · Cámara o galería',
+                style: TextStyle(color: BioTheme.textMuted, fontSize: 12.5),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.photo_library_outlined,
+              size: 18,
+              color: BioTheme.lime,
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Fotos',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+              ),
+            ),
+            Text(
+              '$total/10',
+              style: const TextStyle(
+                fontSize: 12,
+                color: BioTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        if (editing)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'Por ahora puedes editar el texto y la observación; las imágenes se conservan.',
+              style: TextStyle(fontSize: 12.5, color: BioTheme.textSecondary),
+            ),
+          ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 112,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final image in [..._retained])
+                _Thumb(
+                  cover: image == _retained.first,
+                  image: RemotePhoto(image, height: 112),
+                  onRemove: _busy || editing
+                      ? null
+                      : () => setState(() => _retained.remove(image)),
+                ),
+              for (final photo in [..._photos])
+                _Thumb(
+                  cover: _retained.isEmpty && photo == _photos.first,
+                  image: Image.memory(
+                    photo.bytes,
+                    height: 112,
+                    width: 112,
+                    fit: BoxFit.cover,
+                  ),
+                  onRemove: _busy || editing
+                      ? null
+                      : () => setState(() => _photos.remove(photo)),
+                ),
+              if (!editing && total < 10)
+                InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: _busy ? null : _choosePhotoSource,
+                  child: Container(
+                    width: 112,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      color: Colors.white.withValues(alpha: 0.04),
+                      border: Border.all(
+                        color: BioTheme.lime.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_rounded, color: BioTheme.lime, size: 30),
+                        SizedBox(height: 4),
+                        Text(
+                          'Agregar',
+                          style: TextStyle(
+                            color: BioTheme.lime,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
                           ),
-                          onRemove: _busy || widget.post != null
-                              ? null
-                              : () => setState(() => _photos.remove(photo)),
                         ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ],
             ],
           ),
-          const SizedBox(height: 16),
-          _EditorSection(
-            icon: Icons.eco_outlined,
-            title: 'Observación',
-            trailing: _sighting == null ? 'Opcional' : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _observation() => _EditorSection(
+    icon: Icons.eco_outlined,
+    title: 'Observación',
+    trailing: _sighting == null ? 'Opcional' : null,
+    children: [
+      if (_sighting != null)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
+          decoration: BoxDecoration(
+            color: BioTheme.backgroundDeep.withValues(alpha: .4),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
             children: [
-              if (_sighting != null)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
-                  decoration: BoxDecoration(
-                    color: BioTheme.backgroundDeep.withValues(alpha: .4),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _sighting!.species,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              _sighting!.status.label,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: BioTheme.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _sighting!.species,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      _sighting!.status.label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: BioTheme.textSecondary,
                       ),
-                      IconButton(
-                        tooltip: 'Desvincular observación',
-                        onPressed: _busy
-                            ? null
-                            : () => setState(() {
-                                _sighting = null;
-                                _unlinked = true;
-                              }),
-                        icon: const Icon(Icons.link_off),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _busy ? null : _associate,
-                  icon: const Icon(Icons.eco_outlined),
-                  label: Text(
-                    _sighting == null
-                        ? 'Asociar una observación'
-                        : 'Cambiar observación',
-                  ),
-                ),
+              ),
+              IconButton(
+                tooltip: 'Desvincular observación',
+                onPressed: _busy
+                    ? null
+                    : () => setState(() {
+                        _sighting = null;
+                        _unlinked = true;
+                      }),
+                icon: const Icon(Icons.link_off),
               ),
             ],
           ),
-          if (!AppScope.watch(context).community.available)
-            const Padding(
-              padding: EdgeInsets.only(top: 16),
-              child: Text(
-                'La publicación de contenido aún no está disponible. Puedes preparar el contenido aquí; no se guardará al salir.',
-                style: TextStyle(fontSize: 12.5, color: BioTheme.textSecondary),
+        ),
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _busy ? null : _associate,
+          icon: const Icon(Icons.eco_outlined),
+          label: Text(
+            _sighting == null
+                ? 'Asociar una observación'
+                : 'Cambiar observación',
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _form(bool available) => ListView(
+    key: const ValueKey('form'),
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+    children: [
+      _photoPicker(),
+      const SizedBox(height: 22),
+      TextField(
+        controller: _title,
+        onChanged: (_) => setState(() {}),
+        enabled: !_busy,
+        maxLength: 200,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          labelText: 'Título *',
+          hintText: 'Ej.: Un colibrí en el jardín central',
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _text,
+        onChanged: (_) => setState(() {}),
+        enabled: !_busy,
+        maxLength: 200,
+        minLines: 3,
+        maxLines: 8,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(
+          labelText: 'Descripción *',
+          hintText: 'Cuéntanos qué viste, dónde y cuándo.',
+          alignLabelWithHint: true,
+        ),
+      ),
+      const SizedBox(height: 16),
+      _observation(),
+      const SizedBox(height: 14),
+      const Text(
+        'Las fotos de una publicación no se usan para identificar especies.',
+        style: TextStyle(color: BioTheme.textMuted, fontSize: 12.5),
+      ),
+      if (!available)
+        const Padding(
+          padding: EdgeInsets.only(top: 12),
+          child: Text(
+            'La publicación de contenido aún no está disponible. Puedes preparar el contenido aquí; no se guardará al salir.',
+            style: TextStyle(fontSize: 12.5, color: BioTheme.textSecondary),
+          ),
+        ),
+    ],
+  );
+
+  Widget _previewView() {
+    final user = AppScope.watch(context).user;
+    final missing = _title.text.trim().isEmpty || _text.text.trim().isEmpty;
+    return ListView(
+      key: const ValueKey('preview'),
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 24),
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24, 0, 24, 10),
+          child: Text(
+            'Así verá la comunidad tu publicación',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: BioTheme.textMuted, fontSize: 13),
+          ),
+        ),
+        PostPreviewCard(
+          authorName: user?.username ?? 'Tú',
+          avatar: user?.profilePictureUrl,
+          title: _title.text.trim(),
+          text: _text.text.trim(),
+          images: _previewImages(),
+          sighting: _sighting,
+        ),
+        if (missing)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+            child: TextButton.icon(
+              onPressed: () => setState(() => _preview = false),
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text(
+                'Completa el título y la descripción para publicar',
               ),
             ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
+          ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final available = AppScope.watch(context).community.available;
+    final ready =
+        !_busy &&
+        available &&
+        _title.text.trim().isNotEmpty &&
+        _text.text.trim().isNotEmpty;
+    final label = widget.post == null ? 'Publicar' : 'Guardar';
+    return PopScope(
+      canPop: _saved || (!_dirty && !_busy),
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop || _busy) return;
+        if (await confirmAction(
+          context,
+          'Descartar cambios',
+          'Los cambios de esta publicación no se han guardado.',
+        )) {
+          if (!mounted) return;
+          setState(() => _saved = true);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) Navigator.pop(context);
+          });
+        }
+      },
+      child: CommunityScaffold(
+        title: widget.post == null ? 'Nueva publicación' : 'Editar publicación',
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton(
+              onPressed: ready ? _save : null,
               child: Text(
-                _error!,
-                style: const TextStyle(color: BioTheme.danger),
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15.5,
+                  color: ready
+                      ? BioTheme.lime
+                      : BioTheme.lime.withValues(alpha: 0.35),
+                ),
               ),
-            ),
-          const SizedBox(height: 28),
-          FilledButton.icon(
-            onPressed: _busy || !AppScope.watch(context).community.available
-                ? null
-                : _save,
-            icon: _busy
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send_outlined),
-            label: Text(
-              _busy
-                  ? 'Espera un momento…'
-                  : widget.post == null
-                  ? 'Publicar'
-                  : 'Guardar cambios',
             ),
           ),
         ],
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+              child: SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<bool>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(
+                      value: false,
+                      icon: Icon(Icons.edit_outlined, size: 18),
+                      label: Text('Escribir'),
+                    ),
+                    ButtonSegment(
+                      value: true,
+                      icon: Icon(Icons.visibility_outlined, size: 18),
+                      label: Text('Vista previa'),
+                    ),
+                  ],
+                  selected: {_preview},
+                  onSelectionChanged: (value) {
+                    FocusScope.of(context).unfocus();
+                    setState(() => _preview = value.first);
+                  },
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.selected)
+                          ? BioTheme.lime
+                          : Colors.white.withValues(alpha: 0.05),
+                    ),
+                    foregroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.selected)
+                          ? BioTheme.iconDark
+                          : BioTheme.textSecondary,
+                    ),
+                    side: WidgetStatePropertyAll(
+                      BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: _preview ? _previewView() : _form(available),
+              ),
+            ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: BioTheme.danger),
+                        ),
+                      ),
+                    FilledButton.icon(
+                      onPressed: _busy || !available ? null : _save,
+                      icon: _busy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send_outlined),
+                      label: Text(_busy ? 'Espera un momento…' : label),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// Bloque de vidrio con título para agrupar controles del editor y darles aire.
@@ -412,8 +668,9 @@ class _EditorSection extends StatelessWidget {
 }
 
 class _Thumb extends StatelessWidget {
-  const _Thumb({required this.image, this.onRemove});
+  const _Thumb({required this.image, this.onRemove, this.cover = false});
   final Widget image;
+  final bool cover;
   final VoidCallback? onRemove;
   @override
   Widget build(BuildContext context) => Padding(
@@ -427,6 +684,29 @@ class _Thumb extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             image,
+            if (cover)
+              Positioned(
+                left: 6,
+                bottom: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: BioTheme.lime,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'Portada',
+                    style: TextStyle(
+                      color: BioTheme.iconDark,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
             if (onRemove != null)
               Positioned(
                 top: 4,
