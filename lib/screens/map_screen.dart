@@ -618,44 +618,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                         maxZoom: 19,
                       ),
                       children: [
-                        ColorFiltered(
-                          colorFilter: MapConfig.usesCarto
-                              ? const ColorFilter.mode(
-                                  Colors.transparent,
-                                  BlendMode.srcOver,
-                                )
-                              : const ColorFilter.matrix([
-                                  .50,
-                                  .40,
-                                  .10,
-                                  0,
-                                  12,
-                                  .20,
-                                  .70,
-                                  .10,
-                                  0,
-                                  12,
-                                  .20,
-                                  .40,
-                                  .40,
-                                  0,
-                                  12,
-                                  0,
-                                  0,
-                                  0,
-                                  1,
-                                  0,
-                                ]),
-                          child: TileLayer(
-                            urlTemplate: MapConfig.tileUrl,
-                            userAgentPackageName:
-                                'co.edu.javeriana.biojaveriana',
-                            errorTileCallback: (_, _, _) {
-                              if (mounted && !_tileFailed) {
-                                setState(() => _tileFailed = true);
-                              }
-                            },
-                          ),
+                        TileLayer(
+                          urlTemplate: MapConfig.tileUrl,
+                          userAgentPackageName: 'co.edu.javeriana.biojaveriana',
+                          errorTileCallback: (_, _, _) {
+                            if (mounted && !_tileFailed) {
+                              setState(() => _tileFailed = true);
+                            }
+                          },
                         ),
                         PolygonLayer(
                           polygons: [

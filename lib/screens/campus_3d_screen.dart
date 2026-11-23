@@ -113,7 +113,9 @@ class _Campus3DScreenState extends State<Campus3DScreen> {
           'type': 'raster',
           'tiles': [MapConfig.tileUrl],
           'tileSize': 256,
-          'attribution': '© CARTO · © OpenStreetMap contributors',
+          'attribution': MapConfig.usesCarto
+              ? '© CARTO · © OpenStreetMap contributors'
+              : '© OpenStreetMap contributors',
         },
         'buildings': {'type': 'geojson', 'data': buildings},
         'campus': {'type': 'geojson', 'data': campus},
@@ -128,14 +130,6 @@ class _Campus3DScreenState extends State<Campus3DScreen> {
           'id': 'base',
           'type': 'raster',
           'source': 'base',
-          // Mapa base apagado y verdoso para que resalten los edificios.
-          'paint': {
-            'raster-saturation': -0.75,
-            'raster-brightness-max': 0.78,
-            'raster-brightness-min': 0.12,
-            'raster-contrast': 0.05,
-            'raster-hue-rotate': 20,
-          },
         },
         {
           'id': 'campus-fill',
